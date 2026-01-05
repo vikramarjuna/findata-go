@@ -44,6 +44,54 @@ func TestSupportsSymbol(t *testing.T) {
 	}
 }
 
+func TestDetermineMarketCap(t *testing.T) {
+	tests := []struct {
+		name    string
+		indices []string
+		want    string
+	}{
+		{
+			name:    "Large Cap - NIFTY 50",
+			indices: []string{"NIFTY 50"},
+			want:    "Large Cap",
+		},
+		{
+			name:    "Large Cap - NIFTY 100",
+			indices: []string{"NIFTY 100", "NIFTY MIDCAP 100"},
+			want:    "Large Cap", // Large cap takes priority
+		},
+		{
+			name:    "Mid Cap",
+			indices: []string{"NIFTY MIDCAP 50", "NIFTY MIDCAP 100"},
+			want:    "Mid Cap",
+		},
+		{
+			name:    "Small Cap",
+			indices: []string{"NIFTY SMALLCAP 100"},
+			want:    "Small Cap",
+		},
+		{
+			name:    "Other - No matching indices",
+			indices: []string{"NIFTY BANK", "NIFTY IT"},
+			want:    "Other",
+		},
+		{
+			name:    "Empty indices",
+			indices: []string{},
+			want:    "Other",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := determineMarketCap(tt.indices)
+			if got != tt.want {
+				t.Errorf("determineMarketCap(%v) = %v, want %v", tt.indices, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGet_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

@@ -166,7 +166,48 @@ func (p *Provider) Get(symbol string) (*provider.Quote, error) {
 		Indices:       result.Metadata.PdSectorIndAll,
 	}
 
+	// Populate metadata with market cap classification
+	if quote.Metadata == nil {
+		quote.Metadata = make(map[string]string)
+	}
+	quote.Metadata["market_cap"] = determineMarketCap(quote.Indices)
+
 	return quote, nil
+}
+
+// determineMarketCap determines the market cap category based on NSE indices membership
+func determineMarketCap(indices []string) string {
+	hasLargeCap := false
+	hasMidCap := false
+	hasSmallCap := false
+
+	for _, idx := range indices {
+		switch idx {
+		case "NIFTY 50", "NIFTY 100", "NIFTY100 EQUAL WEIGHT", "NIFTY100 ESG",
+			"NIFTY100 ENHANCED ESG", "NIFTY100 LIQUID 15", "NIFTY100 LOW VOLATILITY 30",
+			"NIFTY50 EQUAL WEIGHT", "NIFTY TOP 10 EQUAL WEIGHT", "NIFTY TOP 15 EQUAL WEIGHT",
+			"NIFTY TOP 20 EQUAL WEIGHT":
+			hasLargeCap = true
+		case "NIFTY MIDCAP 50", "NIFTY MIDCAP 100", "NIFTY MIDCAP 150",
+			"NIFTY MIDCAP SELECT", "NIFTY MIDCAP150 QUALITY 50":
+			hasMidCap = true
+		case "NIFTY SMALLCAP 50", "NIFTY SMALLCAP 100", "NIFTY SMALLCAP 250",
+			"NIFTY SMLCAP 50", "NIFTY SMLCAP 100", "NIFTY SMLCAP 250":
+			hasSmallCap = true
+		}
+	}
+
+	// Priority: Large Cap > Mid Cap > Small Cap
+	if hasLargeCap {
+		return "Large Cap"
+	}
+	if hasMidCap {
+		return "Mid Cap"
+	}
+	if hasSmallCap {
+		return "Small Cap"
+	}
+	return "Other"
 }
 
 // GetMultiple fetches quotes for multiple symbols
