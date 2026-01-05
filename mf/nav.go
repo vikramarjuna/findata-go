@@ -6,14 +6,69 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
+	"github.com/Vikramarjuna/findata-go/cache"
 	"github.com/Vikramarjuna/findata-go/config"
 )
 
 const (
 	// AMFIURL is the AMFI portal URL for NAV data
 	AMFIURL = "https://portal.amfiindia.com/spages/NAVAll.txt"
+	// Cache key for all NAVs
+	cacheKeyAllNAVs = "mf:all_navs"
 )
+
+// Global cache instance
+var (
+	globalCache      *cache.Cache
+	cacheMu          sync.RWMutex
+	cacheInitialized bool
+)
+
+// initCache initializes the global cache if not already initialized
+func initCache() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+
+	if cacheInitialized {
+		return
+	}
+
+	cacheConfig := config.GetCacheConfig()
+	globalCache = cache.New(cache.Config{
+		TTL:             cacheConfig.TTL,
+		MaxSize:         cacheConfig.MaxSize,
+		Enabled:         cacheConfig.Enabled,
+		CleanupInterval: cacheConfig.CleanupInterval,
+	})
+	cacheInitialized = true
+}
+
+// getCache returns the global cache, initializing if necessary
+func getCache() *cache.Cache {
+	if !cacheInitialized {
+		initCache()
+	}
+	return globalCache
+}
+
+// ClearCache clears all cached NAVs
+func ClearCache() {
+	c := getCache()
+	if c != nil {
+		c.Clear()
+	}
+}
+
+// GetCacheStats returns cache statistics
+func GetCacheStats() cache.Stats {
+	c := getCache()
+	if c != nil {
+		return c.GetStats()
+	}
+	return cache.Stats{}
+}
 
 // NAV represents a mutual fund NAV entry
 type NAV struct {
@@ -43,7 +98,17 @@ func (e *Error) Error() string {
 // - scheme code
 // - scheme name
 // - ISIN (both primary and reinvestment)
+// Results are cached according to the global cache configuration
 func GetAll() (map[string]*NAV, error) {
+	// Check cache first
+	c := getCache()
+	if cached, ok := c.Get(cacheKeyAllNAVs); ok {
+		if navMap, ok := cached.(map[string]*NAV); ok {
+			return navMap, nil
+		}
+	}
+
+	// Fetch from AMFI
 	resp, err := config.GetHTTPClient().Get(AMFIURL)
 	if err != nil {
 		return nil, &Error{Message: fmt.Sprintf("failed to fetch AMFI data: %v", err)}
@@ -113,6 +178,9 @@ func GetAll() (map[string]*NAV, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, &Error{Message: fmt.Sprintf("error reading AMFI data: %v", err)}
 	}
+
+	// Cache the result
+	c.Set(cacheKeyAllNAVs, navMap)
 
 	return navMap, nil
 }

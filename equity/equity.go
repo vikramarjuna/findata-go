@@ -179,6 +179,7 @@ func Get(symbol string, opts ...Option) (*Quote, error) {
 
 // GetMultiple fetches quotes for multiple symbols
 // Returns a map of symbol -> quote and any errors encountered
+// Uses cache to avoid duplicate API calls
 func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) {
 	// Apply options
 	options := &Options{
@@ -190,12 +191,25 @@ func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) 
 
 	quotes := make(map[string]*Quote)
 	var errors []error
+	c := getCache()
 
-	// Group symbols by provider
+	// Group symbols by provider, checking cache first
 	providerSymbols := make(map[provider.Provider][]string)
+	var uncachedSymbols []string
 
 	for _, symbol := range symbols {
 		symbol = strings.TrimSpace(strings.ToUpper(symbol))
+
+		// Check cache first
+		if cached, ok := c.Get(symbol); ok {
+			if quote, ok := cached.(*Quote); ok {
+				quotes[symbol] = quote
+				continue
+			}
+		}
+
+		// Not in cache, need to fetch
+		uncachedSymbols = append(uncachedSymbols, symbol)
 		p, err := detectProvider(symbol, options)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("%s: %w", symbol, err))
@@ -204,11 +218,13 @@ func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) 
 		providerSymbols[p] = append(providerSymbols[p], symbol)
 	}
 
-	// Fetch from each provider
+	// Fetch uncached symbols from each provider
 	for p, syms := range providerSymbols {
 		providerQuotes, providerErrors := p.GetMultiple(syms)
 		for symbol, quote := range providerQuotes {
 			quotes[symbol] = quote
+			// Cache the result
+			c.Set(symbol, quote)
 		}
 		errors = append(errors, providerErrors...)
 	}
