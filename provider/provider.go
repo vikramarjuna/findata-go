@@ -2,6 +2,8 @@
 package provider
 
 import (
+	"fmt"
+
 	"github.com/Vikramarjuna/findata-go/config"
 )
 
@@ -52,8 +54,7 @@ type Error struct {
 
 func (e *Error) Error() string {
 	if e.Code > 0 {
-		return e.Provider + ": " + e.Message + " (code: " + string(rune(e.Code)) + ")"
+		return fmt.Sprintf("%s: %s (code: %d)", e.Provider, e.Message, e.Code)
 	}
 	return e.Provider + ": " + e.Message
 }
-
