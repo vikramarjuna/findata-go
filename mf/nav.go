@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Vikramarjuna/finance-india"
+	"github.com/Vikramarjuna/findata-go/config"
 )
 
 const (
@@ -25,20 +25,33 @@ type NAV struct {
 	Date       string  `json:"date"`
 }
 
+// Error represents a mutual fund error
+type Error struct {
+	Message string
+	Code    int
+}
+
+func (e *Error) Error() string {
+	if e.Code > 0 {
+		return fmt.Sprintf("%s (code: %d)", e.Message, e.Code)
+	}
+	return e.Message
+}
+
 // GetAll fetches all NAVs from AMFI portal
 // Returns a map with multiple keys for flexible lookup:
 // - scheme code
 // - scheme name
 // - ISIN (both primary and reinvestment)
 func GetAll() (map[string]*NAV, error) {
-	resp, err := finance.Client.Get(AMFIURL)
+	resp, err := config.GetHTTPClient().Get(AMFIURL)
 	if err != nil {
-		return nil, &finance.Error{Message: fmt.Sprintf("failed to fetch AMFI data: %v", err)}
+		return nil, &Error{Message: fmt.Sprintf("failed to fetch AMFI data: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, &finance.Error{
+		return nil, &Error{
 			Message: fmt.Sprintf("AMFI portal returned error"),
 			Code:    resp.StatusCode,
 		}
@@ -98,7 +111,7 @@ func GetAll() (map[string]*NAV, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, &finance.Error{Message: fmt.Sprintf("error reading AMFI data: %v", err)}
+		return nil, &Error{Message: fmt.Sprintf("error reading AMFI data: %v", err)}
 	}
 
 	return navMap, nil
@@ -113,7 +126,7 @@ func Get(identifier string) (*NAV, error) {
 
 	nav, ok := navMap[identifier]
 	if !ok {
-		return nil, &finance.Error{Message: fmt.Sprintf("NAV not found for: %s", identifier)}
+		return nil, &Error{Message: fmt.Sprintf("NAV not found for: %s", identifier)}
 	}
 
 	return nav, nil

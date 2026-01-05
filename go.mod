@@ -1,3 +1,3 @@
-module github.com/Vikramarjuna/finance-india
+module github.com/Vikramarjuna/findata-go
 
 go 1.25.5

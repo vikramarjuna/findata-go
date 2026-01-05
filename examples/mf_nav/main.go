@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Vikramarjuna/finance-india/mf"
+	"github.com/Vikramarjuna/findata-go/mf"
 )
 
 func main() {
@@ -55,4 +55,3 @@ func main() {
 		fmt.Printf("  %s: ₹%.4f\n", id, n.NAV)
 	}
 }
-

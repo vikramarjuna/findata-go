@@ -1,6 +1,6 @@
-# Migration Guide: Using finance-india in investment_tracker
+# Migration Guide: Using findata-go in investment_tracker
 
-This guide shows how to replace the existing price sync code in `investment_tracker` with the new `finance-india` library.
+This guide shows how to replace the existing price sync code in `investment_tracker` with the new `findata-go` library.
 
 ## Installation
 
@@ -8,7 +8,7 @@ Add the library to your `go.mod`:
 
 ```bash
 cd investment_tracker
-go get github.com/Vikramarjuna/finance-india
+go get github.com/Vikramarjuna/findata-go
 ```
 
 ## Changes Required
@@ -26,17 +26,19 @@ func (s *PriceSyncService) FetchNSEQuote(symbol string) (*NSEQuoteResponse, erro
 ```
 
 **After:**
-```go
-import "github.com/Vikramarjuna/finance-india/nse"
 
-func (s *PriceSyncService) FetchNSEQuote(symbol string) (*nse.Quote, error) {
-    return nse.Get(symbol)
+```go
+import "github.com/Vikramarjuna/findata-go/equity"
+
+func (s *PriceSyncService) FetchNSEQuote(symbol string) (*equity.Quote, error) {
+    return equity.Get(symbol)  // Auto-detects NSE!
 }
 ```
 
 ### 2. Update AMFI NAV Fetching
 
 **Before:**
+
 ```go
 func (s *PriceSyncService) FetchAMFINAVs() (map[string]AMFINav, error) {
     url := "https://portal.amfiindia.com/spages/NAVAll.txt"
@@ -45,8 +47,9 @@ func (s *PriceSyncService) FetchAMFINAVs() (map[string]AMFINav, error) {
 ```
 
 **After:**
+
 ```go
-import "github.com/Vikramarjuna/finance-india/mf"
+import "github.com/Vikramarjuna/findata-go/mf"
 
 func (s *PriceSyncService) FetchAMFINAVs() (map[string]*mf.NAV, error) {
     return mf.GetAll()
@@ -59,24 +62,27 @@ The library uses cleaner type names. Update your code:
 
 | Old Type | New Type |
 |----------|----------|
-| `NSEQuoteResponse` | `nse.Quote` |
+| `NSEQuoteResponse` | `equity.Quote` |
 | `AMFINav` | `mf.NAV` |
 
 ### 4. Update Field Access
 
 Some fields have been renamed for clarity:
 
-**NSE Quote Fields:**
+**Equity Quote Fields:**
+
 ```go
 // Old
 quote.PriceInfo.LastPrice
 quote.Info.CompanyName
 quote.IndustryInfo.Sector
 
-// New
+// New (cleaner!)
 quote.LastPrice
 quote.CompanyName
 quote.Sector
+quote.Exchange  // NEW: Shows which exchange (NSE, BSE, etc.)
+quote.Currency  // NEW: Shows currency (INR, USD, etc.)
 ```
 
 **AMFI NAV Fields:**
@@ -103,22 +109,32 @@ nav.NAV
 Here's how the sync function would look:
 
 ```go
+import (
+    "github.com/Vikramarjuna/findata-go/config"
+    "github.com/Vikramarjuna/findata-go/equity"
+)
+
+func init() {
+    // Set default market once at startup
+    config.SetDefaultMarket(config.MarketIndia)
+}
+
 func (s *PriceSyncService) syncEquities(equities []repository.Holding, result *SyncResult) {
     // Get unique symbols
     symbols := make([]string, 0, len(equities))
     for _, h := range equities {
         symbols = append(symbols, h.Symbol)
     }
-    
-    // Fetch all quotes at once
-    quotes, errors := nse.GetMultiple(symbols)
-    
+
+    // Fetch all quotes at once - library auto-detects exchanges!
+    quotes, errors := equity.GetMultiple(symbols)
+
     // Log errors
     for _, err := range errors {
         logger.Error("Failed to fetch quote: %v", err)
         result.Errors = append(result.Errors, err.Error())
     }
-    
+
     // Update holdings
     for symbol, quote := range quotes {
         for _, h := range equities {
@@ -127,6 +143,8 @@ func (s *PriceSyncService) syncEquities(equities []repository.Holding, result *S
                     "name":     quote.CompanyName,
                     "sector":   quote.Sector,
                     "industry": quote.Industry,
+                    "exchange": string(quote.Exchange),  // NEW: Track exchange
+                    "currency": quote.Currency,          // NEW: Track currency
                 }
                 if err := s.repo.UpdateHoldingPriceAndTags(h.Symbol, quote.LastPrice, tags); err != nil {
                     logger.Error("Failed to update %s: %v", h.Symbol, err)
