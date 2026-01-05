@@ -4,7 +4,9 @@ package equity
 import (
 	"fmt"
 	"strings"
+	"sync"
 
+	"github.com/Vikramarjuna/findata-go/cache"
 	"github.com/Vikramarjuna/findata-go/config"
 	"github.com/Vikramarjuna/findata-go/provider"
 	"github.com/Vikramarjuna/findata-go/provider/nse"
@@ -43,6 +45,57 @@ var providers = []provider.Provider{
 	// bse.New(),
 	// alphavantage.New(),
 	// finnhub.New(),
+}
+
+// Global cache instance
+var (
+	globalCache      *cache.Cache
+	cacheMu          sync.RWMutex
+	cacheInitialized bool
+)
+
+// initCache initializes the global cache if not already initialized
+func initCache() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+
+	if cacheInitialized {
+		return
+	}
+
+	cacheConfig := config.GetCacheConfig()
+	globalCache = cache.New(cache.Config{
+		TTL:             cacheConfig.TTL,
+		MaxSize:         cacheConfig.MaxSize,
+		Enabled:         cacheConfig.Enabled,
+		CleanupInterval: cacheConfig.CleanupInterval,
+	})
+	cacheInitialized = true
+}
+
+// getCache returns the global cache, initializing if necessary
+func getCache() *cache.Cache {
+	if !cacheInitialized {
+		initCache()
+	}
+	return globalCache
+}
+
+// ClearCache clears all cached quotes
+func ClearCache() {
+	c := getCache()
+	if c != nil {
+		c.Clear()
+	}
+}
+
+// GetCacheStats returns cache statistics
+func GetCacheStats() cache.Stats {
+	c := getCache()
+	if c != nil {
+		return c.GetStats()
+	}
+	return cache.Stats{}
 }
 
 // detectProvider finds the best provider for a symbol
@@ -85,6 +138,7 @@ func detectProvider(symbol string, opts *Options) (provider.Provider, error) {
 // Get fetches a quote for a single symbol
 // The symbol is automatically routed to the appropriate provider
 // Use options to override default behavior
+// Quotes are cached according to the global cache configuration
 func Get(symbol string, opts ...Option) (*Quote, error) {
 	// Apply options
 	options := &Options{
@@ -97,6 +151,14 @@ func Get(symbol string, opts ...Option) (*Quote, error) {
 	// Clean up symbol
 	symbol = strings.TrimSpace(strings.ToUpper(symbol))
 
+	// Check cache first
+	c := getCache()
+	if cached, ok := c.Get(symbol); ok {
+		if quote, ok := cached.(*Quote); ok {
+			return quote, nil
+		}
+	}
+
 	// Find the right provider
 	p, err := detectProvider(symbol, options)
 	if err != nil {
@@ -104,7 +166,15 @@ func Get(symbol string, opts ...Option) (*Quote, error) {
 	}
 
 	// Fetch the quote
-	return p.Get(symbol)
+	quote, err := p.Get(symbol)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the result
+	c.Set(symbol, quote)
+
+	return quote, nil
 }
 
 // GetMultiple fetches quotes for multiple symbols
@@ -145,4 +215,3 @@ func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) 
 
 	return quotes, errors
 }
-

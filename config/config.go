@@ -33,6 +33,19 @@ const (
 	ExchangeNASDAQ Exchange = "NASDAQ"
 )
 
+// RetryPolicy defines retry behavior for failed requests
+type RetryPolicy struct {
+	MaxRetries    int
+	BaseDelay     time.Duration
+	BackoffFactor float64
+}
+
+// RateLimit defines rate limiting behavior
+type RateLimit struct {
+	RequestsPerSecond float64
+	BurstSize         int
+}
+
 // Config holds the global configuration
 type Config struct {
 	mu            sync.RWMutex
@@ -40,6 +53,17 @@ type Config struct {
 	httpClient    *http.Client
 	apiKeys       map[string]string
 	userAgent     string
+	cacheConfig   CacheConfig
+	retryPolicy   RetryPolicy
+	rateLimit     RateLimit
+}
+
+// CacheConfig holds cache configuration
+type CacheConfig struct {
+	Enabled         bool
+	TTL             time.Duration
+	MaxSize         int
+	CleanupInterval time.Duration
 }
 
 var globalConfig = &Config{
@@ -49,6 +73,21 @@ var globalConfig = &Config{
 	},
 	apiKeys:   make(map[string]string),
 	userAgent: "findata-go/1.0",
+	cacheConfig: CacheConfig{
+		Enabled:         true,
+		TTL:             5 * time.Minute,
+		MaxSize:         1000,
+		CleanupInterval: 10 * time.Minute,
+	},
+	retryPolicy: RetryPolicy{
+		MaxRetries:    3,
+		BaseDelay:     30 * time.Second,
+		BackoffFactor: 2.0,
+	},
+	rateLimit: RateLimit{
+		RequestsPerSecond: 2.0,
+		BurstSize:         5,
+	},
 }
 
 // SetDefaultMarket sets the default market for symbol lookups
@@ -109,3 +148,44 @@ func GetUserAgent() string {
 	return globalConfig.userAgent
 }
 
+// SetCacheConfig sets the cache configuration
+func SetCacheConfig(config CacheConfig) {
+	globalConfig.mu.Lock()
+	defer globalConfig.mu.Unlock()
+	globalConfig.cacheConfig = config
+}
+
+// GetCacheConfig returns the cache configuration
+func GetCacheConfig() CacheConfig {
+	globalConfig.mu.RLock()
+	defer globalConfig.mu.RUnlock()
+	return globalConfig.cacheConfig
+}
+
+// SetRetryPolicy sets the retry policy
+func SetRetryPolicy(policy RetryPolicy) {
+	globalConfig.mu.Lock()
+	defer globalConfig.mu.Unlock()
+	globalConfig.retryPolicy = policy
+}
+
+// GetRetryPolicy returns the retry policy
+func GetRetryPolicy() RetryPolicy {
+	globalConfig.mu.RLock()
+	defer globalConfig.mu.RUnlock()
+	return globalConfig.retryPolicy
+}
+
+// SetRateLimit sets the rate limit
+func SetRateLimit(limit RateLimit) {
+	globalConfig.mu.Lock()
+	defer globalConfig.mu.Unlock()
+	globalConfig.rateLimit = limit
+}
+
+// GetRateLimit returns the rate limit
+func GetRateLimit() RateLimit {
+	globalConfig.mu.RLock()
+	defer globalConfig.mu.RUnlock()
+	return globalConfig.rateLimit
+}
