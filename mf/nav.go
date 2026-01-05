@@ -117,7 +117,7 @@ func GetAll() (map[string]*NAV, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, &Error{
-			Message: fmt.Sprintf("AMFI portal returned error"),
+			Message: "AMFI portal returned error",
 			Code:    resp.StatusCode,
 		}
 	}
