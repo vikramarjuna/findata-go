@@ -347,18 +347,34 @@ func TestGet_SymbolNormalization(t *testing.T) {
 }
 
 func TestGet_HTTPError(t *testing.T) {
-	// Create a test server that returns an error
+	// Create a test server that returns 404
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("Symbol not found"))
 	}))
 	defer server.Close()
 
-	// Test demonstrates error handling structure
-	// In production, HTTP errors are handled by the Get function
-	// This is tested through integration tests with invalid symbols
-	t.Logf("Test server URL: %s", server.URL)
-	t.Log("Error handling is tested through integration tests with invalid symbols")
+	// Create provider with test server URL
+	p := NewWithBaseURL(server.URL)
+	_, err := p.Get("TEST")
+
+	if err == nil {
+		t.Error("Expected error for 404 response")
+	}
+
+	// Verify error contains status code
+	provErr, ok := err.(*provider.Error)
+	if !ok {
+		t.Fatalf("Expected *provider.Error, got %T", err)
+	}
+
+	if provErr.Code != http.StatusNotFound {
+		t.Errorf("Error code = %d, want %d", provErr.Code, http.StatusNotFound)
+	}
+
+	if provErr.Provider != "NSE" {
+		t.Errorf("Provider = %s, want NSE", provErr.Provider)
+	}
 }
 
 func TestGet_InvalidJSON(t *testing.T) {
@@ -369,9 +385,154 @@ func TestGet_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// This test demonstrates the JSON parsing error handling
-	// In practice, this is hard to test without dependency injection
-	t.Log("JSON parsing errors are handled in the Get function")
+	// Create provider with test server URL
+	p := NewWithBaseURL(server.URL)
+	_, err := p.Get("TEST")
+
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+
+	// Verify error message mentions JSON parsing
+	if err != nil && !contains(err.Error(), "parse") && !contains(err.Error(), "JSON") {
+		t.Errorf("Error should mention JSON parsing: %v", err)
+	}
+}
+
+func TestGet_HTTP500Error(t *testing.T) {
+	// Create a test server that returns 500
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	_, err := p.Get("TEST")
+
+	if err == nil {
+		t.Error("Expected error for 500 response")
+	}
+
+	provErr, ok := err.(*provider.Error)
+	if !ok {
+		t.Fatalf("Expected *provider.Error, got %T", err)
+	}
+
+	if provErr.Code != http.StatusInternalServerError {
+		t.Errorf("Error code = %d, want %d", provErr.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestGet_EmptyResponse(t *testing.T) {
+	// Create a test server that returns empty JSON
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("{}"))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	quote, err := p.Get("TEST")
+
+	// Should not error on empty but valid JSON
+	if err != nil {
+		t.Errorf("Unexpected error for empty JSON: %v", err)
+	}
+
+	if quote == nil {
+		t.Error("Quote should not be nil")
+	}
+}
+
+func TestGet_ValidMockResponse(t *testing.T) {
+	// Create a test server that returns valid NSE-like JSON
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request headers
+		if r.Header.Get("Accept") != "application/json" {
+			t.Errorf("Accept header = %s, want application/json", r.Header.Get("Accept"))
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"info": {
+				"symbol": "TEST",
+				"companyName": "Test Company",
+				"industry": "Technology"
+			},
+			"metadata": {
+				"pdSectorIndAll": ["NIFTY 50", "NIFTY IT"]
+			},
+			"priceInfo": {
+				"lastPrice": 100.50,
+				"change": 2.50,
+				"pChange": 2.55,
+				"previousClose": 98.00,
+				"open": 99.00,
+				"intraDayHighLow": {
+					"max": 101.00,
+					"min": 98.50
+				},
+				"weekHighLow": {
+					"max": 120.00,
+					"min": 80.00
+				}
+			},
+			"preOpenMarket": {
+				"totalTradedVolume": 1000000,
+				"totalTradedValue": 100500000
+			},
+			"industryInfo": {
+				"macro": "Technology",
+				"sector": "IT Services",
+				"industry": "Software"
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	quote, err := p.Get("TEST")
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify all fields
+	if quote.Symbol != "TEST" {
+		t.Errorf("Symbol = %s, want TEST", quote.Symbol)
+	}
+	if quote.CompanyName != "Test Company" {
+		t.Errorf("CompanyName = %s, want Test Company", quote.CompanyName)
+	}
+	if quote.LastPrice != 100.50 {
+		t.Errorf("LastPrice = %f, want 100.50", quote.LastPrice)
+	}
+	if quote.Currency != "INR" {
+		t.Errorf("Currency = %s, want INR", quote.Currency)
+	}
+	if quote.Exchange != config.ExchangeNSE {
+		t.Errorf("Exchange = %s, want NSE", quote.Exchange)
+	}
+	if len(quote.Indices) != 2 {
+		t.Errorf("Indices length = %d, want 2", len(quote.Indices))
+	}
+}
+
+// Helper function
+func contains(s, substr string) bool {
+	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			len(s) > len(substr) && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func TestGetMultiple_Concurrency(t *testing.T) {
@@ -466,5 +627,126 @@ func TestQuote_DataIntegrity(t *testing.T) {
 			t.Logf("Warning: LastPrice (%v) outside day range [%v, %v]",
 				quote.LastPrice, quote.DayLow, quote.DayHigh)
 		}
+	}
+}
+
+func TestNewWithBaseURL(t *testing.T) {
+	customURL := "https://custom.example.com"
+	p := NewWithBaseURL(customURL)
+
+	if p.baseURL != customURL {
+		t.Errorf("baseURL = %s, want %s", p.baseURL, customURL)
+	}
+}
+
+func TestGet_MalformedJSON(t *testing.T) {
+	// Test with JSON that has syntax errors
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"info": {"symbol": "TEST", "companyName": "Test"}`)) // Missing closing brace
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	_, err := p.Get("TEST")
+
+	if err == nil {
+		t.Error("Expected error for malformed JSON")
+	}
+}
+
+func TestGet_PartialJSON(t *testing.T) {
+	// Test with partial but valid JSON
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"info": {
+				"symbol": "TEST"
+			},
+			"priceInfo": {
+				"lastPrice": 50.0
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	quote, err := p.Get("TEST")
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if quote.Symbol != "TEST" {
+		t.Errorf("Symbol = %s, want TEST", quote.Symbol)
+	}
+
+	if quote.LastPrice != 50.0 {
+		t.Errorf("LastPrice = %f, want 50.0", quote.LastPrice)
+	}
+
+	// Other fields should be zero/empty
+	if quote.CompanyName != "" {
+		t.Errorf("CompanyName should be empty, got %s", quote.CompanyName)
+	}
+}
+
+func TestGet_RequestHeaders(t *testing.T) {
+	// Verify that correct headers are sent
+	headersCaptured := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check headers
+		if r.Header.Get("Accept") == "application/json" &&
+			r.Header.Get("Accept-Language") == "en-US,en;q=0.9" &&
+			r.Header.Get("User-Agent") != "" {
+			headersCaptured = true
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	_, _ = p.Get("TEST")
+
+	if !headersCaptured {
+		t.Error("Expected headers were not set correctly")
+	}
+}
+
+func TestGet_QueryParameter(t *testing.T) {
+	// Verify that symbol is passed as query parameter
+	symbolCaptured := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		symbolCaptured = r.URL.Query().Get("symbol")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	_, _ = p.Get("TESTSTOCK")
+
+	if symbolCaptured != "TESTSTOCK" {
+		t.Errorf("Symbol query param = %s, want TESTSTOCK", symbolCaptured)
+	}
+}
+
+func TestGet_SymbolNormalizationInRequest(t *testing.T) {
+	// Verify that symbol is normalized before sending
+	symbolCaptured := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		symbolCaptured = r.URL.Query().Get("symbol")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	_, _ = p.Get(" lowercase ")
+
+	if symbolCaptured != "LOWERCASE" {
+		t.Errorf("Symbol query param = %s, want LOWERCASE", symbolCaptured)
 	}
 }

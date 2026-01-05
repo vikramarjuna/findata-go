@@ -22,11 +22,22 @@ const (
 )
 
 // Provider implements the NSE data provider
-type Provider struct{}
+type Provider struct {
+	baseURL string // Allow overriding for testing
+}
 
 // New creates a new NSE provider
 func New() *Provider {
-	return &Provider{}
+	return &Provider{
+		baseURL: BaseURL,
+	}
+}
+
+// NewWithBaseURL creates a new NSE provider with custom base URL (for testing)
+func NewWithBaseURL(baseURL string) *Provider {
+	return &Provider{
+		baseURL: baseURL,
+	}
 }
 
 // Name returns the provider name
@@ -84,7 +95,7 @@ func (p *Provider) Get(symbol string) (*provider.Quote, error) {
 	// Clean up symbol (remove any whitespace, convert to uppercase)
 	symbol = strings.TrimSpace(strings.ToUpper(symbol))
 
-	url := fmt.Sprintf("%s%s?symbol=%s", BaseURL, QuoteEndpoint, symbol)
+	url := fmt.Sprintf("%s%s?symbol=%s", p.baseURL, QuoteEndpoint, symbol)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -174,4 +185,3 @@ func (p *Provider) GetMultiple(symbols []string) (map[string]*provider.Quote, []
 
 	return quotes, errors
 }
-
