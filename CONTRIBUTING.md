@@ -36,7 +36,7 @@ Be respectful, inclusive, and professional in all interactions.
 ### Prerequisites
 
 - Go 1.22 or higher (1.24 recommended)
-- golangci-lint for linting
+- golangci-lint v2.7.2 or higher for linting
 
 ### Clone and Setup
 
