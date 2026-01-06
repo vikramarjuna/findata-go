@@ -62,7 +62,6 @@ linters:
     goconst:
       min-len: 3
       min-occurrences: 3
-      ignore-tests: true
 
     gocyclo:
       min-complexity: 15
@@ -110,6 +109,7 @@ linters:
           - funlen
           - gocognit
           - gocyclo
+          - goconst
 
       # Exclude example files from some checks
       - path: examples/

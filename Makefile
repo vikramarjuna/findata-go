@@ -1,4 +1,4 @@
-.PHONY: test test-short coverage fmt lint build examples clean version tag-version help
+.PHONY: test test-short coverage fmt lint lint-config build examples clean version tag-version help
 
 # Version management
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
@@ -22,8 +22,12 @@ coverage:
 fmt:
 	go fmt ./...
 
+# Verify linter config
+lint-config:
+	golangci-lint config verify
+
 # Lint code
-lint:
+lint: lint-config
 	golangci-lint run
 
 # Build examples
@@ -74,7 +78,8 @@ help:
 	@echo "  test-short    - Run tests without integration tests"
 	@echo "  coverage      - Run tests with coverage report"
 	@echo "  fmt           - Format code"
-	@echo "  lint          - Run linter"
+	@echo "  lint-config   - Verify golangci-lint configuration"
+	@echo "  lint          - Verify config and run linter"
 	@echo "  examples      - Build example binaries"
 	@echo "  run-nse       - Run NSE quote example"
 	@echo "  run-mf        - Run MF NAV example"
