@@ -142,7 +142,7 @@ func GetAll() (map[string]*NAV, error) {
 
 func fetchAMFIData() (*http.Response, error) {
 	logger.Debug("creating HTTP request to AMFI", "url", AMFIURL)
-	req, err := http.NewRequestWithContext(context.Background(), "GET", AMFIURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", AMFIURL, http.NoBody)
 	if err != nil {
 		logger.Error("failed to create HTTP request", "error", err)
 		return nil, &Error{Message: fmt.Sprintf("failed to create request: %v", err)}

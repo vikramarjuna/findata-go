@@ -81,9 +81,16 @@ var (
 // noopLogger is a logger that does nothing (silent by default)
 type noopLogger struct{}
 
+// Debug does nothing (no-op implementation).
 func (n *noopLogger) Debug(_ string, _ ...any) {}
-func (n *noopLogger) Info(_ string, _ ...any)  {}
-func (n *noopLogger) Warn(_ string, _ ...any)  {}
+
+// Info does nothing (no-op implementation).
+func (n *noopLogger) Info(_ string, _ ...any) {}
+
+// Warn does nothing (no-op implementation).
+func (n *noopLogger) Warn(_ string, _ ...any) {}
+
+// Error does nothing (no-op implementation).
 func (n *noopLogger) Error(_ string, _ ...any) {}
 
 // SetLogger sets the global logger for findata-go.
@@ -135,14 +142,17 @@ type slogLogger struct {
 	logger *slog.Logger
 }
 
+// Debug logs a debug message with optional key-value pairs.
 func (s *slogLogger) Debug(msg string, keysAndValues ...any) {
 	s.logger.Debug(msg, keysAndValues...)
 }
 
+// Info logs an info message with optional key-value pairs.
 func (s *slogLogger) Info(msg string, keysAndValues ...any) {
 	s.logger.Info(msg, keysAndValues...)
 }
 
+// Warn logs a warning message with optional key-value pairs.
 func (s *slogLogger) Warn(msg string, keysAndValues ...any) {
 	s.logger.Warn(msg, keysAndValues...)
 }

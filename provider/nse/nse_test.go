@@ -582,7 +582,7 @@ func verifyValidMockQuote(t *testing.T, quote *provider.Quote) {
 
 // Helper function
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) &&
+	return s != "" && substr != "" && (s == substr || len(s) >= len(substr) &&
 		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
 			len(s) > len(substr) && findSubstring(s, substr)))
 }

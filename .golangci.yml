@@ -30,7 +30,7 @@ linters:
     - gosec         # Security-focused linter
     - bodyclose     # Check HTTP response body is closed
     - noctx         # Check for sending HTTP requests without context
-    
+
   disable:
     - exhaustive    # Too strict for most cases
     - exhaustruct   # Too strict for most cases
@@ -49,87 +49,76 @@ linters:
     - gochecknoglobals # Allow globals for package-level config
     - gochecknoinits   # Allow init functions for setup
 
-settings:
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-    exclude-functions:
-      # Common functions where error can be safely ignored
-      - (io.Closer).Close
-      - (*database/sql.Rows).Close
-      - (*database/sql.DB).Close
-      
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-    ignore-tests: true
-    
-  gocyclo:
-    min-complexity: 15
-    
-  gocognit:
-    min-complexity: 30
-    
-  nestif:
-    min-complexity: 5
-    
-  funlen:
-    lines: 100
-    statements: 50
-    ignore-comments: true
-    
-  dupl:
-    threshold: 150
-    
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-    disabled-checks:
-      - unnamedResult
-      - hugeParam
-      - rangeValCopy
-      
-  revive:
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        # Common functions where error can be safely ignored
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+      ignore-tests: true
+
+    gocyclo:
+      min-complexity: 15
+
+    gocognit:
+      min-complexity: 30
+
+    nestif:
+      min-complexity: 5
+
+    funlen:
+      lines: 100
+      statements: 50
+      ignore-comments: true
+
+    dupl:
+      threshold: 150
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - unnamedResult
+        - hugeParam
+        - rangeValCopy
+
+    gosec:
+      excludes:
+        - G104  # Audit errors not checked (covered by errcheck)
+        - G304  # File path provided as taint input (too strict for examples)
+
+    misspell:
+      locale: US
+
+  exclusions:
     rules:
-      - name: exported
-        disabled: false
-        arguments:
-          - "checkPrivateReceivers"
-          - "sayRepetitiveInsteadOfStutters"
-      - name: package-comments
-        disabled: true  # Don't require package comments for now
-      - name: unexported-return
-        disabled: true  # Allow unexported types in return values
-    
-  gosec:
-    excludes:
-      - G104  # Audit errors not checked (covered by errcheck)
-      - G304  # File path provided as taint input (too strict for examples)
-      
-  misspell:
-    locale: US
+      # Exclude some linters from running on tests files
+      - path: _test\.go
+        linters:
+          - errcheck
+          - dupl
+          - gosec
+          - funlen
+          - gocognit
+          - gocyclo
+
+      # Exclude example files from some checks
+      - path: examples/
+        linters:
+          - errcheck
+          - gosec
+          - funlen
 
 issues:
-  exclude:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - errcheck
-        - dupl
-        - gosec
-        - funlen
-        - gocognit
-        - gocyclo
-
-    # Exclude example files from some checks
-    - path: examples/
-      linters:
-        - errcheck
-        - gosec
-        - funlen
-
-  max-per-linter: 0
-  max-same: 0
+  max-issues-per-linter: 0
+  max-same-issues: 0
 

@@ -180,7 +180,7 @@ func TestConcurrentLogging(t *testing.T) {
 
 	// Just verify it doesn't panic
 	output := buf.String()
-	if len(output) == 0 {
+	if output == "" {
 		t.Error("Expected some output from concurrent logging")
 	}
 }

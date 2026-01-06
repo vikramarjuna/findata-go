@@ -114,7 +114,7 @@ func (p *Provider) fetchNSEData(symbol string) (*nseQuoteResponse, error) {
 	url := fmt.Sprintf("%s%s?symbol=%s", p.baseURL, QuoteEndpoint, symbol)
 	logger.Debug("creating NSE API request", "url", url, "symbol", symbol)
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, http.NoBody)
 	if err != nil {
 		logger.Error("failed to create NSE request", "error", err, "symbol", symbol)
 		return nil, &provider.Error{
