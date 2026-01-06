@@ -1,5 +1,5 @@
 # golangci-lint configuration
-version: 2
+version: "2"
 
 run:
   timeout: 5m
@@ -49,7 +49,7 @@ linters:
     - gochecknoglobals # Allow globals for package-level config
     - gochecknoinits   # Allow init functions for setup
 
-linters-settings:
+settings:
   errcheck:
     check-type-assertions: false
     check-blank: false
@@ -112,7 +112,7 @@ linters-settings:
     locale: US
 
 issues:
-  exclude-rules:
+  exclude:
     # Exclude some linters from running on tests files
     - path: _test\.go
       linters:
@@ -122,15 +122,14 @@ issues:
         - funlen
         - gocognit
         - gocyclo
-        
+
     # Exclude example files from some checks
     - path: examples/
       linters:
         - errcheck
         - gosec
         - funlen
-        
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  new: false
+
+  max-per-linter: 0
+  max-same: 0
 
