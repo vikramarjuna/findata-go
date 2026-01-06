@@ -33,3 +33,5 @@ Thumbs.db
 bin/
 dist/
 
+# Personal setup scripts (not for committing)
+setup-personal-*.sh
