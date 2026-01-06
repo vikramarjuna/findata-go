@@ -31,7 +31,7 @@ Inspired by [finance-go](https://github.com/piquette/finance-go), this library p
 
 ## Installation
 
-**Requirements:** Go 1.23 or higher (1.25 recommended)
+**Requirements:** Go 1.22 or higher (1.24 recommended)
 
 ```bash
 go get github.com/Vikramarjuna/findata-go
