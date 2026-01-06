@@ -1,26 +1,40 @@
-.PHONY: test test-short test-parallel test-pkg coverage fmt lint lint-config build examples clean version tag-version help
+.PHONY: test test-short test-race test-ci test-ci-race test-pkg coverage coverage-race fmt lint lint-config build examples clean version tag-version help
 
 # Version management
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
 VERSION_FILE = VERSION
 
-# Run all tests
+# Run all tests (fast, no race detector)
 test:
-	go test -v -race -parallel 4 ./...
+	go test -v -parallel 4 ./...
 
 # Run tests without integration tests
 test-short:
-	go test -v -short -race -parallel 4 ./...
+	go test -v -short -parallel 4 ./...
+
+# Run tests with race detector (slower but catches concurrency bugs)
+test-race:
+	go test -v -race -parallel 4 ./...
+
+# Run tests with higher parallelism (for CI)
+test-ci:
+	go test -v -parallel 8 -timeout 10m ./...
+
+# Run tests with race detector and higher parallelism (for CI)
+test-ci-race:
+	go test -v -race -parallel 8 -timeout 10m ./...
 
 # Run tests with coverage
 coverage:
-	go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	go test -v -parallel 4 -coverprofile=coverage.out -covermode=atomic ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-# Run tests in parallel with verbose output
-test-parallel:
-	go test -v -race -parallel 8 -timeout 10m ./...
+# Run tests with coverage and race detector
+coverage-race:
+	go test -v -race -parallel 4 -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
 
 # Run a specific package's tests
 test-pkg:
@@ -28,7 +42,7 @@ test-pkg:
 		echo "Error: PKG is required. Usage: make test-pkg PKG=./provider/nse"; \
 		exit 1; \
 	fi
-	go test -v -race -parallel 4 $(PKG)
+	go test -v -parallel 4 $(PKG)
 
 # Format code
 fmt:
@@ -86,11 +100,14 @@ tag-version:
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  test          - Run all tests with race detector and parallelism"
+	@echo "  test          - Run all tests (fast, parallel=4)"
 	@echo "  test-short    - Run tests without integration tests"
-	@echo "  test-parallel - Run tests with higher parallelism (8 workers)"
+	@echo "  test-race     - Run tests with race detector (slower, catches bugs)"
+	@echo "  test-ci       - Run tests with higher parallelism (parallel=8, for CI)"
+	@echo "  test-ci-race  - Run tests with race detector and higher parallelism (for CI)"
 	@echo "  test-pkg      - Run tests for a specific package (PKG=./path/to/pkg)"
 	@echo "  coverage      - Run tests with coverage report"
+	@echo "  coverage-race - Run tests with coverage and race detector"
 	@echo "  fmt           - Format code"
 	@echo "  lint-config   - Verify golangci-lint configuration"
 	@echo "  lint          - Verify config and run linter"
