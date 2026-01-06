@@ -1,7 +1,10 @@
 # findata-go
 
+[![CI](https://github.com/Vikramarjuna/findata-go/workflows/CI/badge.svg)](https://github.com/Vikramarjuna/findata-go/actions/workflows/ci.yml)
 [![GoDoc](https://godoc.org/github.com/Vikramarjuna/findata-go?status.svg)](https://godoc.org/github.com/Vikramarjuna/findata-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Vikramarjuna/findata-go)](https://goreportcard.com/report/github.com/Vikramarjuna/findata-go)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Release](https://img.shields.io/github/v/release/Vikramarjuna/findata-go)](https://github.com/Vikramarjuna/findata-go/releases)
 
 A unified Go library for accessing financial markets data across multiple exchanges and countries.
 
@@ -24,8 +27,11 @@ Inspired by [finance-go](https://github.com/piquette/finance-go), this library p
 ✅ **Zero Dependencies** - Only uses Go standard library
 ✅ **Type-Safe** - Comprehensive type definitions
 ✅ **Well-Tested** - Includes integration tests
+✅ **Structured Logging** - Built-in logging with multiple levels and formats
 
 ## Installation
+
+**Requirements:** Go 1.23 or higher (1.25 recommended)
 
 ```bash
 go get github.com/Vikramarjuna/findata-go
@@ -217,15 +223,77 @@ type NAV struct {
 }
 ```
 
+## Logging
+
+The library provides **optional** structured logging using Go's standard `log/slog` package.
+
+**By default, logging is disabled** (silent). This follows Go library best practices - the library won't pollute your logs unless you explicitly enable it.
+
+### Enable Logging
+
+```go
+import "github.com/Vikramarjuna/findata-go/logger"
+
+// Enable with default settings (INFO level, text format, stderr)
+logger.SetLogger(logger.NewSlogLogger())
+
+// Enable with custom configuration
+logger.SetLogger(logger.NewSlogLogger(
+    logger.WithLevel(logger.LevelDebug),      // DEBUG, INFO, WARN, ERROR
+    logger.WithFormat(logger.FormatJSON),     // FormatText or FormatJSON
+    logger.WithOutput(logFile),               // Any io.Writer
+))
+
+// Disable logging
+logger.SetLogger(nil)
+```
+
+### Example Output
+
+```text
+time=2026-01-06T21:54:51.887+05:30 level=INFO msg="successfully fetched NSE quote" symbol=RELIANCE price=1577.00 currency=INR
+```
+
+### Use Your Own Logger
+
+Implement the `logger.Logger` interface to use your own logging framework:
+
+```go
+type Logger interface {
+    Debug(msg string, keysAndValues ...any)
+    Info(msg string, keysAndValues ...any)
+    Warn(msg string, keysAndValues ...any)
+    Error(msg string, keysAndValues ...any)
+}
+
+logger.SetLogger(myCustomLogger)
+```
+
+See the [logger package documentation](https://pkg.go.dev/github.com/Vikramarjuna/findata-go/logger) for full API details.
+
 ## Examples
 
 See the [examples](./examples) directory for complete working examples.
 
-## License
+## Versioning
 
-MIT License - see LICENSE file for details.
+This project follows [Semantic Versioning](https://semver.org/). See [CHANGELOG.md](./CHANGELOG.md) for release history.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on:
 
+- How to report bugs
+- How to suggest features
+- Development setup
+- Coding standards
+- Pull request process
+
+## License
+
+MIT License - see [LICENSE](./LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by [finance-go](https://github.com/piquette/finance-go)
+- Data sources: NSE India, AMFI India

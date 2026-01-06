@@ -9,10 +9,16 @@ import (
 	"github.com/Vikramarjuna/findata-go/provider"
 )
 
+const (
+	testProviderName = "NSE"
+	testSymbol       = "RELIANCE"
+	testCurrency     = "INR"
+)
+
 func TestProviderName(t *testing.T) {
 	p := New()
-	if p.Name() != "NSE" {
-		t.Errorf("Name() = %v, want NSE", p.Name())
+	if p.Name() != testProviderName {
+		t.Errorf("Name() = %v, want %s", p.Name(), testProviderName)
 	}
 }
 
@@ -24,7 +30,7 @@ func TestSupportsSymbol(t *testing.T) {
 		symbol string
 		want   bool
 	}{
-		{"Valid uppercase", "RELIANCE", true},
+		{"Valid uppercase", testSymbol, true},
 		{"Valid with numbers", "NIFTY50", true},
 		{"Valid with ampersand", "M&M", true},
 		{"Invalid with dot", "BRK.A", false},
@@ -98,19 +104,19 @@ func TestGet_Integration(t *testing.T) {
 	}
 
 	p := New()
-	quote, err := p.Get("RELIANCE")
+	quote, err := p.Get(testSymbol)
 	if err != nil {
 		t.Fatalf("Get(RELIANCE) error = %v", err)
 	}
 
 	// Validate quote structure
-	if quote.Symbol != "RELIANCE" {
+	if quote.Symbol != testSymbol {
 		t.Errorf("Symbol = %v, want RELIANCE", quote.Symbol)
 	}
 	if quote.Exchange != config.ExchangeNSE {
 		t.Errorf("Exchange = %v, want NSE", quote.Exchange)
 	}
-	if quote.Currency != "INR" {
+	if quote.Currency != testCurrency {
 		t.Errorf("Currency = %v, want INR", quote.Currency)
 	}
 	if quote.LastPrice <= 0 {
@@ -164,7 +170,7 @@ func TestGetMultiple_Integration(t *testing.T) {
 		if quote.Exchange != config.ExchangeNSE {
 			t.Errorf("Exchange = %v, want NSE", quote.Exchange)
 		}
-		if quote.Currency != "INR" {
+		if quote.Currency != testCurrency {
 			t.Errorf("Currency = %v, want INR", quote.Currency)
 		}
 		if quote.LastPrice <= 0 {
@@ -217,7 +223,7 @@ func TestSymbolCleaning(t *testing.T) {
 				t.Skipf("Skipping due to error: %v", err)
 				return
 			}
-			if quote.Symbol != "RELIANCE" {
+			if quote.Symbol != testSymbol {
 				t.Errorf("Symbol = %v, want RELIANCE", quote.Symbol)
 			}
 		})
@@ -230,7 +236,7 @@ func TestQuoteFields(t *testing.T) {
 	}
 
 	p := New()
-	quote, err := p.Get("RELIANCE")
+	quote, err := p.Get(testSymbol)
 	if err != nil {
 		t.Fatalf("Get(RELIANCE) error = %v", err)
 	}
@@ -241,9 +247,9 @@ func TestQuoteFields(t *testing.T) {
 		value interface{}
 		check func(interface{}) bool
 	}{
-		{"Symbol", quote.Symbol, func(v interface{}) bool { return v.(string) == "RELIANCE" }},
+		{"Symbol", quote.Symbol, func(v interface{}) bool { return v.(string) == testSymbol }},
 		{"Exchange", quote.Exchange, func(v interface{}) bool { return v.(config.Exchange) == config.ExchangeNSE }},
-		{"Currency", quote.Currency, func(v interface{}) bool { return v.(string) == "INR" }},
+		{"Currency", quote.Currency, func(v interface{}) bool { return v.(string) == testCurrency }},
 		{"CompanyName", quote.CompanyName, func(v interface{}) bool { return v.(string) != "" }},
 		{"Industry", quote.Industry, func(v interface{}) bool { return v.(string) != "" }},
 		{"Sector", quote.Sector, func(v interface{}) bool { return v.(string) != "" }},
@@ -300,7 +306,7 @@ func TestGetMultiple_SingleSymbol(t *testing.T) {
 	}
 }
 
-func TestProviderInterface(t *testing.T) {
+func TestProviderInterface(_ *testing.T) {
 	// Verify Provider implements provider.Provider interface
 	var _ provider.Provider = (*Provider)(nil)
 }
@@ -396,9 +402,9 @@ func TestGet_SymbolNormalization(t *testing.T) {
 
 func TestGet_HTTPError(t *testing.T) {
 	// Create a test server that returns 404
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Symbol not found"))
+		_, _ = w.Write([]byte("Symbol not found"))
 	}))
 	defer server.Close()
 
@@ -420,16 +426,16 @@ func TestGet_HTTPError(t *testing.T) {
 		t.Errorf("Error code = %d, want %d", provErr.Code, http.StatusNotFound)
 	}
 
-	if provErr.Provider != "NSE" {
-		t.Errorf("Provider = %s, want NSE", provErr.Provider)
+	if provErr.Provider != testProviderName {
+		t.Errorf("Provider = %s, want %s", provErr.Provider, testProviderName)
 	}
 }
 
 func TestGet_InvalidJSON(t *testing.T) {
 	// Create a test server that returns invalid JSON
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
@@ -449,9 +455,9 @@ func TestGet_InvalidJSON(t *testing.T) {
 
 func TestGet_HTTP500Error(t *testing.T) {
 	// Create a test server that returns 500
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
 
@@ -474,9 +480,9 @@ func TestGet_HTTP500Error(t *testing.T) {
 
 func TestGet_EmptyResponse(t *testing.T) {
 	// Create a test server that returns empty JSON
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{}"))
+		_, _ = w.Write([]byte("{}"))
 	}))
 	defer server.Close()
 
@@ -493,6 +499,43 @@ func TestGet_EmptyResponse(t *testing.T) {
 	}
 }
 
+func mockValidNSEResponse() string {
+	return `{
+		"info": {
+			"symbol": "TEST",
+			"companyName": "Test Company",
+			"industry": "Technology"
+		},
+		"metadata": {
+			"pdSectorIndAll": ["NIFTY 50", "NIFTY IT"]
+		},
+		"priceInfo": {
+			"lastPrice": 100.50,
+			"change": 2.50,
+			"pChange": 2.55,
+			"previousClose": 98.00,
+			"open": 99.00,
+			"intraDayHighLow": {
+				"max": 101.00,
+				"min": 98.50
+			},
+			"weekHighLow": {
+				"max": 120.00,
+				"min": 80.00
+			}
+		},
+		"preOpenMarket": {
+			"totalTradedVolume": 1000000,
+			"totalTradedValue": 100500000
+		},
+		"industryInfo": {
+			"macro": "Technology",
+			"sector": "IT Services",
+			"industry": "Software"
+		}
+	}`
+}
+
 func TestGet_ValidMockResponse(t *testing.T) {
 	// Create a test server that returns valid NSE-like JSON
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -500,42 +543,8 @@ func TestGet_ValidMockResponse(t *testing.T) {
 		if r.Header.Get("Accept") != "application/json" {
 			t.Errorf("Accept header = %s, want application/json", r.Header.Get("Accept"))
 		}
-
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
-			"info": {
-				"symbol": "TEST",
-				"companyName": "Test Company",
-				"industry": "Technology"
-			},
-			"metadata": {
-				"pdSectorIndAll": ["NIFTY 50", "NIFTY IT"]
-			},
-			"priceInfo": {
-				"lastPrice": 100.50,
-				"change": 2.50,
-				"pChange": 2.55,
-				"previousClose": 98.00,
-				"open": 99.00,
-				"intraDayHighLow": {
-					"max": 101.00,
-					"min": 98.50
-				},
-				"weekHighLow": {
-					"max": 120.00,
-					"min": 80.00
-				}
-			},
-			"preOpenMarket": {
-				"totalTradedVolume": 1000000,
-				"totalTradedValue": 100500000
-			},
-			"industryInfo": {
-				"macro": "Technology",
-				"sector": "IT Services",
-				"industry": "Software"
-			}
-		}`))
+		_, _ = w.Write([]byte(mockValidNSEResponse()))
 	}))
 	defer server.Close()
 
@@ -546,7 +555,11 @@ func TestGet_ValidMockResponse(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Verify all fields
+	verifyValidMockQuote(t, quote)
+}
+
+func verifyValidMockQuote(t *testing.T, quote *provider.Quote) {
+	t.Helper()
 	if quote.Symbol != "TEST" {
 		t.Errorf("Symbol = %s, want TEST", quote.Symbol)
 	}
@@ -556,7 +569,7 @@ func TestGet_ValidMockResponse(t *testing.T) {
 	if quote.LastPrice != 100.50 {
 		t.Errorf("LastPrice = %f, want 100.50", quote.LastPrice)
 	}
-	if quote.Currency != "INR" {
+	if quote.Currency != testCurrency {
 		t.Errorf("Currency = %s, want INR", quote.Currency)
 	}
 	if quote.Exchange != config.ExchangeNSE {
@@ -591,7 +604,7 @@ func TestGetMultiple_Concurrency(t *testing.T) {
 	p := New()
 
 	// Test with multiple symbols to ensure no race conditions
-	symbols := []string{"TCS", "INFY", "WIPRO", "HDFCBANK", "RELIANCE"}
+	symbols := []string{"TCS", "INFY", "WIPRO", "HDFCBANK", testSymbol}
 	quotes, errors := p.GetMultiple(symbols)
 
 	if len(errors) > 0 {
@@ -655,7 +668,7 @@ func TestQuote_DataIntegrity(t *testing.T) {
 	}
 
 	p := New()
-	quote, err := p.Get("RELIANCE")
+	quote, err := p.Get(testSymbol)
 	if err != nil {
 		t.Fatalf("Get(RELIANCE) error = %v", err)
 	}
@@ -689,9 +702,9 @@ func TestNewWithBaseURL(t *testing.T) {
 
 func TestGet_MalformedJSON(t *testing.T) {
 	// Test with JSON that has syntax errors
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"info": {"symbol": "TEST", "companyName": "Test"}`)) // Missing closing brace
+		_, _ = w.Write([]byte(`{"info": {"symbol": "TEST", "companyName": "Test"}`)) // Missing closing brace
 	}))
 	defer server.Close()
 
@@ -705,9 +718,9 @@ func TestGet_MalformedJSON(t *testing.T) {
 
 func TestGet_PartialJSON(t *testing.T) {
 	// Test with partial but valid JSON
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"info": {
 				"symbol": "TEST"
 			},
@@ -751,7 +764,7 @@ func TestGet_RequestHeaders(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
 
@@ -769,7 +782,7 @@ func TestGet_QueryParameter(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		symbolCaptured = r.URL.Query().Get("symbol")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
 
@@ -787,7 +800,7 @@ func TestGet_SymbolNormalizationInRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		symbolCaptured = r.URL.Query().Get("symbol")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
 

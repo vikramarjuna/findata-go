@@ -103,7 +103,7 @@ func TestDefaultValues(t *testing.T) {
 
 	client := GetHTTPClient()
 	if client == nil {
-		t.Error("Default HTTP client should not be nil")
+		t.Fatal("Default HTTP client should not be nil")
 	}
 	if client.Timeout != 30*time.Second {
 		t.Errorf("Default timeout should be 30s, got %v", client.Timeout)
@@ -115,7 +115,7 @@ func TestDefaultValues(t *testing.T) {
 	}
 }
 
-func TestConcurrentAccess(t *testing.T) {
+func TestConcurrentAccess(_ *testing.T) {
 	// Test thread-safety
 	done := make(chan bool)
 
@@ -177,4 +177,3 @@ func TestExchangeConstants(t *testing.T) {
 		})
 	}
 }
-

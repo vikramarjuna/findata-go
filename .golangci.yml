@@ -1,0 +1,136 @@
+# golangci-lint configuration
+version: 2
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Enabled by default
+    - errcheck      # Check for unchecked errors
+    - govet         # Vet examines Go source code
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Advanced static analysis
+    - unused        # Check for unused code
+
+    # Additional useful linters
+    - misspell      # Check for misspelled words
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Report unused function parameters
+    - goconst       # Find repeated strings that could be constants
+    - gocyclo       # Check cyclomatic complexity
+    - gocognit      # Check cognitive complexity
+    - nestif        # Check deeply nested if statements
+    - funlen        # Check function length
+    - dupl          # Check for code duplication
+    - gocritic      # Comprehensive Go linter
+    - revive        # Fast, configurable, extensible linter
+    - gosec         # Security-focused linter
+    - bodyclose     # Check HTTP response body is closed
+    - noctx         # Check for sending HTTP requests without context
+    
+  disable:
+    - exhaustive    # Too strict for most cases
+    - exhaustruct   # Too strict for most cases
+    - wrapcheck     # Too opinionated about error wrapping
+    - nlreturn      # Too opinionated about newlines
+    - wsl           # Too opinionated about whitespace
+    - lll           # Line length is handled by gofmt
+    - godox         # Don't fail on TODO/FIXME comments
+    - testpackage   # Don't require separate test packages
+    - paralleltest  # Don't require t.Parallel() in all tests
+    - tparallel     # Don't require t.Parallel() in all tests
+    - varnamelen    # Variable name length can be context-dependent
+    - ireturn       # Too strict about interface returns
+    - cyclop        # Redundant with gocyclo
+    - maintidx      # Maintainability index is too opinionated
+    - gochecknoglobals # Allow globals for package-level config
+    - gochecknoinits   # Allow init functions for setup
+
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+    exclude-functions:
+      # Common functions where error can be safely ignored
+      - (io.Closer).Close
+      - (*database/sql.Rows).Close
+      - (*database/sql.DB).Close
+      
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+    ignore-tests: true
+    
+  gocyclo:
+    min-complexity: 15
+    
+  gocognit:
+    min-complexity: 30
+    
+  nestif:
+    min-complexity: 5
+    
+  funlen:
+    lines: 100
+    statements: 50
+    ignore-comments: true
+    
+  dupl:
+    threshold: 150
+    
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - unnamedResult
+      - hugeParam
+      - rangeValCopy
+      
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+        arguments:
+          - "checkPrivateReceivers"
+          - "sayRepetitiveInsteadOfStutters"
+      - name: package-comments
+        disabled: true  # Don't require package comments for now
+      - name: unexported-return
+        disabled: true  # Allow unexported types in return values
+    
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked (covered by errcheck)
+      - G304  # File path provided as taint input (too strict for examples)
+      
+  misspell:
+    locale: US
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - dupl
+        - gosec
+        - funlen
+        - gocognit
+        - gocyclo
+        
+    # Exclude example files from some checks
+    - path: examples/
+      linters:
+        - errcheck
+        - gosec
+        - funlen
+        
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+

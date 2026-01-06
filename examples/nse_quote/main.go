@@ -1,3 +1,4 @@
+// Package main demonstrates how to fetch NSE stock quotes.
 package main
 
 import (
@@ -9,6 +10,21 @@ import (
 )
 
 func main() {
+	// Optional: Enable logging (disabled by default)
+	// Uncomment to see library logs:
+	// logger.SetLogger(logger.NewSlogLogger(
+	//     logger.WithLevel(logger.LevelInfo),  // Change to LevelDebug for verbose output
+	//     logger.WithFormat(logger.FormatText),
+	// ))
+
+	// Optional: Log to a file
+	// logFile, _ := os.OpenFile("findata.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// defer logFile.Close()
+	// logger.SetLogger(logger.NewSlogLogger(
+	//     logger.WithLevel(logger.LevelInfo),
+	//     logger.WithOutput(logFile),
+	// ))
+
 	// Optional: Set default market (defaults to India)
 	config.SetDefaultMarket(config.MarketIndia)
 

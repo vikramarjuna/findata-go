@@ -8,6 +8,7 @@ import (
 
 	"github.com/Vikramarjuna/findata-go/cache"
 	"github.com/Vikramarjuna/findata-go/config"
+	"github.com/Vikramarjuna/findata-go/logger"
 	"github.com/Vikramarjuna/findata-go/provider"
 	"github.com/Vikramarjuna/findata-go/provider/nse"
 )
@@ -100,8 +101,11 @@ func GetCacheStats() cache.Stats {
 
 // detectProvider finds the best provider for a symbol
 func detectProvider(symbol string, opts *Options) (provider.Provider, error) {
+	logger.Debug("detecting provider for symbol", "symbol", symbol, "exchange", opts.Exchange, "market", opts.Market)
+
 	// If exchange is explicitly specified, use that
 	if opts.Exchange != "" {
+		logger.Debug("using explicitly specified exchange", "exchange", opts.Exchange)
 		switch opts.Exchange {
 		case config.ExchangeNSE:
 			return nse.New(), nil
@@ -114,10 +118,12 @@ func detectProvider(symbol string, opts *Options) (provider.Provider, error) {
 
 	// If market is specified, filter providers by market
 	if opts.Market != "" && opts.Market != config.MarketAuto {
+		logger.Debug("filtering by market", "market", opts.Market)
 		switch opts.Market {
 		case config.MarketIndia:
 			// Try NSE first for Indian market
 			if nse.New().SupportsSymbol(symbol) {
+				logger.Debug("NSE provider selected for Indian market", "symbol", symbol)
 				return nse.New(), nil
 			}
 		case config.MarketUS:
@@ -126,12 +132,15 @@ func detectProvider(symbol string, opts *Options) (provider.Provider, error) {
 	}
 
 	// Auto-detect based on symbol pattern
+	logger.Debug("auto-detecting provider", "symbol", symbol)
 	for _, p := range providers {
 		if p.SupportsSymbol(symbol) {
+			logger.Debug("provider auto-detected", "symbol", symbol, "provider", p.Name())
 			return p, nil
 		}
 	}
 
+	logger.Warn("no provider found for symbol", "symbol", symbol)
 	return nil, fmt.Errorf("no provider found for symbol: %s", symbol)
 }
 
@@ -150,26 +159,34 @@ func Get(symbol string, opts ...Option) (*Quote, error) {
 
 	// Clean up symbol
 	symbol = strings.TrimSpace(strings.ToUpper(symbol))
+	logger.Debug("fetching equity quote", "symbol", symbol)
 
 	// Check cache first
 	c := getCache()
 	if cached, ok := c.Get(symbol); ok {
 		if quote, ok := cached.(*Quote); ok {
+			logger.Debug("returning cached quote", "symbol", symbol)
 			return quote, nil
 		}
 	}
 
+	logger.Debug("cache miss, fetching from provider", "symbol", symbol)
+
 	// Find the right provider
 	p, err := detectProvider(symbol, options)
 	if err != nil {
+		logger.Error("failed to detect provider", "symbol", symbol, "error", err)
 		return nil, err
 	}
 
 	// Fetch the quote
 	quote, err := p.Get(symbol)
 	if err != nil {
+		logger.Error("failed to fetch quote from provider", "symbol", symbol, "provider", p.Name(), "error", err)
 		return nil, err
 	}
+
+	logger.Info("successfully fetched equity quote", "symbol", symbol, "exchange", quote.Exchange, "price", quote.LastPrice)
 
 	// Cache the result
 	c.Set(symbol, quote)
@@ -181,6 +198,8 @@ func Get(symbol string, opts ...Option) (*Quote, error) {
 // Returns a map of symbol -> quote and any errors encountered
 // Uses cache to avoid duplicate API calls
 func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) {
+	logger.Debug("fetching multiple equity quotes", "count", len(symbols))
+
 	// Apply options
 	options := &Options{
 		Market: config.GetDefaultMarket(),
@@ -195,7 +214,7 @@ func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) 
 
 	// Group symbols by provider, checking cache first
 	providerSymbols := make(map[provider.Provider][]string)
-	var uncachedSymbols []string
+	cachedCount := 0
 
 	for _, symbol := range symbols {
 		symbol = strings.TrimSpace(strings.ToUpper(symbol))
@@ -204,30 +223,38 @@ func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) 
 		if cached, ok := c.Get(symbol); ok {
 			if quote, ok := cached.(*Quote); ok {
 				quotes[symbol] = quote
+				cachedCount++
 				continue
 			}
 		}
 
 		// Not in cache, need to fetch
-		uncachedSymbols = append(uncachedSymbols, symbol)
 		p, err := detectProvider(symbol, options)
 		if err != nil {
+			logger.Warn("failed to detect provider for symbol in batch", "symbol", symbol, "error", err)
 			errors = append(errors, fmt.Errorf("%s: %w", symbol, err))
 			continue
 		}
 		providerSymbols[p] = append(providerSymbols[p], symbol)
 	}
 
+	logger.Debug("batch fetch cache stats", "total", len(symbols), "cached", cachedCount, "to_fetch", len(symbols)-cachedCount)
+
 	// Fetch uncached symbols from each provider
 	for p, syms := range providerSymbols {
+		logger.Debug("fetching from provider", "provider", p.Name(), "symbols_count", len(syms))
 		providerQuotes, providerErrors := p.GetMultiple(syms)
 		for symbol, quote := range providerQuotes {
 			quotes[symbol] = quote
 			// Cache the result
 			c.Set(symbol, quote)
 		}
+		if len(providerErrors) > 0 {
+			logger.Warn("provider returned errors", "provider", p.Name(), "error_count", len(providerErrors))
+		}
 		errors = append(errors, providerErrors...)
 	}
 
+	logger.Info("batch fetch completed", "total_requested", len(symbols), "successful", len(quotes), "errors", len(errors))
 	return quotes, errors
 }

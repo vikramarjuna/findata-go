@@ -2,6 +2,7 @@
 package nse
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Vikramarjuna/findata-go/config"
+	"github.com/Vikramarjuna/findata-go/logger"
 	"github.com/Vikramarjuna/findata-go/provider"
 )
 
@@ -94,11 +96,27 @@ type nseQuoteResponse struct {
 func (p *Provider) Get(symbol string) (*provider.Quote, error) {
 	// Clean up symbol (remove any whitespace, convert to uppercase)
 	symbol = strings.TrimSpace(strings.ToUpper(symbol))
+	logger.Debug("fetching NSE quote", "symbol", symbol, "provider", p.Name())
 
-	url := fmt.Sprintf("%s%s?symbol=%s", p.baseURL, QuoteEndpoint, symbol)
-
-	req, err := http.NewRequest("GET", url, nil)
+	// Fetch data from NSE API
+	result, err := p.fetchNSEData(symbol)
 	if err != nil {
+		return nil, err
+	}
+
+	// Convert to provider.Quote
+	quote := p.mapToQuote(result)
+	logger.Info("successfully fetched NSE quote", "symbol", symbol, "price", quote.LastPrice, "currency", quote.Currency)
+	return quote, nil
+}
+
+func (p *Provider) fetchNSEData(symbol string) (*nseQuoteResponse, error) {
+	url := fmt.Sprintf("%s%s?symbol=%s", p.baseURL, QuoteEndpoint, symbol)
+	logger.Debug("creating NSE API request", "url", url, "symbol", symbol)
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	if err != nil {
+		logger.Error("failed to create NSE request", "error", err, "symbol", symbol)
 		return nil, &provider.Error{
 			Message:  fmt.Sprintf("failed to create request: %v", err),
 			Provider: p.Name(),
@@ -110,17 +128,22 @@ func (p *Provider) Get(symbol string) (*provider.Quote, error) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
+	logger.Debug("sending HTTP request to NSE", "symbol", symbol)
 	resp, err := config.GetHTTPClient().Do(req)
 	if err != nil {
+		logger.Error("NSE HTTP request failed", "error", err, "symbol", symbol, "url", url)
 		return nil, &provider.Error{
 			Message:  fmt.Sprintf("HTTP request failed: %v", err),
 			Provider: p.Name(),
 		}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		logger.Warn("NSE API returned non-OK status", "status_code", resp.StatusCode, "symbol", symbol, "response", string(body))
 		return nil, &provider.Error{
 			Message:  fmt.Sprintf("NSE API returned error: %s", string(body)),
 			Code:     resp.StatusCode,
@@ -130,21 +153,27 @@ func (p *Provider) Get(symbol string) (*provider.Quote, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logger.Error("failed to read NSE response body", "error", err, "symbol", symbol)
 		return nil, &provider.Error{
 			Message:  fmt.Sprintf("failed to read response: %v", err),
 			Provider: p.Name(),
 		}
 	}
 
+	logger.Debug("parsing NSE JSON response", "symbol", symbol, "body_size", len(body))
 	var result nseQuoteResponse
 	if err := json.Unmarshal(body, &result); err != nil {
+		logger.Error("failed to parse NSE JSON", "error", err, "symbol", symbol)
 		return nil, &provider.Error{
 			Message:  fmt.Sprintf("failed to parse JSON: %v", err),
 			Provider: p.Name(),
 		}
 	}
 
-	// Map to provider.Quote
+	return &result, nil
+}
+
+func (p *Provider) mapToQuote(result *nseQuoteResponse) *provider.Quote {
 	quote := &provider.Quote{
 		Symbol:        result.Info.Symbol,
 		Exchange:      config.ExchangeNSE,
@@ -172,7 +201,7 @@ func (p *Provider) Get(symbol string) (*provider.Quote, error) {
 	}
 	quote.Metadata["market_cap"] = determineMarketCap(quote.Indices)
 
-	return quote, nil
+	return quote
 }
 
 // determineMarketCap determines the market cap category based on NSE indices membership
