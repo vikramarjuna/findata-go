@@ -1,10 +1,12 @@
 package metals
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Vikramarjuna/findata-go/config"
@@ -12,13 +14,28 @@ import (
 
 // IndianProvider fetches metal prices for the Indian market (INR)
 type IndianProvider struct {
-	client *http.Client
+	client    *http.Client
+	ibjaCache *ibjaData
+	cacheTime time.Time
+	cacheTTL  time.Duration
+}
+
+// ibjaData holds parsed IBJA metal prices
+type ibjaData struct {
+	gold999     float64 // per gram (24K)
+	gold995     float64 // per gram
+	gold916     float64 // per gram (22K)
+	gold750     float64 // per gram (18K)
+	gold585     float64 // per gram (14K)
+	silver999   float64 // per gram
+	platinum999 float64 // per gram
 }
 
 // newIndianProvider creates a new Indian metal price provider
 func newIndianProvider() *IndianProvider {
 	return &IndianProvider{
-		client: config.GetHTTPClient(),
+		client:   config.GetHTTPClient(),
+		cacheTTL: 5 * time.Minute, // Cache IBJA data for 5 minutes
 	}
 }
 
@@ -108,26 +125,57 @@ func (p *IndianProvider) GetAllPrices() ([]*Price, error) {
 
 // getGoldPrice fetches gold price for a specific purity
 func (p *IndianProvider) getGoldPrice(purity string) (*Price, error) {
-	// Fetch base 24K gold price
-	base24KPrice, err := p.fetchGoldPriceFromAPI()
-	if err != nil {
-		// Use fallback price
-		base24KPrice = 7200.0 // Approximate 24K gold price per gram in INR (Jan 2026)
-	}
+	// Fetch IBJA data (cached)
+	data, err := p.fetchIBJAData()
 
-	// Calculate price based on purity
 	var pricePerGram float64
-	var purityMultiplier float64
+	var useFallback bool
 
+	// Get price based on purity from IBJA data
 	switch purity {
 	case "24K":
-		purityMultiplier = 1.000
+		if err != nil || data.gold999 == 0 {
+			pricePerGram = 14000.0 // Fallback
+			useFallback = true
+		} else {
+			pricePerGram = data.gold999
+		}
 	case "22K":
-		purityMultiplier = 0.916
+		if err != nil || data.gold916 == 0 {
+			// Fallback: calculate from 24K
+			base := 14000.0
+			if data.gold999 > 0 {
+				base = data.gold999
+			}
+			pricePerGram = base * 0.916
+			useFallback = true
+		} else {
+			pricePerGram = data.gold916
+		}
 	case "18K":
-		purityMultiplier = 0.750
+		if err != nil || data.gold750 == 0 {
+			// Fallback: calculate from 24K
+			base := 14000.0
+			if data.gold999 > 0 {
+				base = data.gold999
+			}
+			pricePerGram = base * 0.750
+			useFallback = true
+		} else {
+			pricePerGram = data.gold750
+		}
 	case "14K":
-		purityMultiplier = 0.585
+		if err != nil || data.gold585 == 0 {
+			// Fallback: calculate from 24K
+			base := 14000.0
+			if data.gold999 > 0 {
+				base = data.gold999
+			}
+			pricePerGram = base * 0.585
+			useFallback = true
+		} else {
+			pricePerGram = data.gold585
+		}
 	default:
 		return nil, &Error{
 			Message:  fmt.Sprintf("unsupported gold purity: %s", purity),
@@ -137,7 +185,7 @@ func (p *IndianProvider) getGoldPrice(purity string) (*Price, error) {
 		}
 	}
 
-	pricePerGram = base24KPrice * purityMultiplier
+	_ = useFallback // Suppress unused variable warning
 
 	return &Price{
 		Metal:        Gold,
@@ -151,11 +199,15 @@ func (p *IndianProvider) getGoldPrice(purity string) (*Price, error) {
 
 // getSilverPrice fetches silver price for a specific purity
 func (p *IndianProvider) getSilverPrice(purity string) (*Price, error) {
-	// Fetch base 999 silver price
-	base999Price, err := p.fetchSilverPriceFromAPI()
-	if err != nil {
-		// Use fallback price
-		base999Price = 90.0 // Approximate 999 silver price per gram in INR (Jan 2026)
+	// Fetch IBJA data (cached)
+	data, err := p.fetchIBJAData()
+
+	var base999Price float64
+	if err != nil || data.silver999 == 0 {
+		// Use fallback price (updated Jan 2026 - IBJA rates ~₹2567 per 10g)
+		base999Price = 257.0 // Approximate 999 silver price per gram in INR
+	} else {
+		base999Price = data.silver999
 	}
 
 	// Calculate price based on purity
@@ -190,11 +242,15 @@ func (p *IndianProvider) getSilverPrice(purity string) (*Price, error) {
 
 // getPlatinumPrice fetches platinum price for a specific purity
 func (p *IndianProvider) getPlatinumPrice(purity string) (*Price, error) {
-	// Fetch base 999 platinum price
-	base999Price, err := p.fetchPlatinumPriceFromAPI()
-	if err != nil {
-		// Use fallback price
-		base999Price = 3200.0 // Approximate 999 platinum price per gram in INR (Jan 2026)
+	// Fetch IBJA data (cached)
+	data, err := p.fetchIBJAData()
+
+	var base999Price float64
+	if err != nil || data.platinum999 == 0 {
+		// Use fallback price (updated Jan 2026 - IBJA rates ~₹7569 per 10g)
+		base999Price = 757.0 // Approximate 999 platinum price per gram in INR
+	} else {
+		base999Price = data.platinum999
 	}
 
 	// Calculate price based on purity
@@ -227,65 +283,97 @@ func (p *IndianProvider) getPlatinumPrice(purity string) (*Price, error) {
 	}, nil
 }
 
-// fetchGoldPriceFromAPI attempts to fetch gold price from external API
-func (p *IndianProvider) fetchGoldPriceFromAPI() (float64, error) {
-	// Try GoodReturns API
-	url := "https://www.goodreturns.in/gold-rates/api/get-gold-price.json"
+// fetchIBJAData fetches and caches all metal prices from IBJA website
+func (p *IndianProvider) fetchIBJAData() (*ibjaData, error) {
+	// Check cache
+	if p.ibjaCache != nil && time.Since(p.cacheTime) < p.cacheTTL {
+		return p.ibjaCache, nil
+	}
+
+	url := "https://ibjarates.com/"
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, err
+		return nil, fmt.Errorf("error creating request: %v", err)
 	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return 0, err
+		return nil, fmt.Errorf("error fetching IBJA data: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("IBJA returned status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		return nil, fmt.Errorf("error reading response: %v", err)
 	}
 
-	// Parse response
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, err
-	}
+	html := string(body)
 
-	// Extract 24K gold price (per 10 grams)
-	var pricePer10g float64
-	if data, ok := result["data"].(map[string]interface{}); ok {
-		if gold24k, ok := data["24k"].(float64); ok {
-			pricePer10g = gold24k
-		} else if gold24k, ok := data["gold_24k"].(float64); ok {
-			pricePer10g = gold24k
+	// Parse all metal prices from the HTML
+	data := &ibjaData{}
+
+	// Parse Gold prices - per gram prices from GoldRatesCompare spans
+	// Gold 999 (24K): <span id="GoldRatesCompare999">14045</span>
+	if matches := regexp.MustCompile(`<span id="GoldRatesCompare999">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
+		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
+			data.gold999 = price
 		}
 	}
 
-	if pricePer10g == 0 {
-		return 0, fmt.Errorf("could not parse gold price from API response")
+	// Gold 995: <span id="GoldRatesCompare995">13989</span>
+	if matches := regexp.MustCompile(`<span id="GoldRatesCompare995">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
+		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
+			data.gold995 = price
+		}
 	}
 
-	// Convert from per 10 grams to per gram
-	return pricePer10g / 10.0, nil
-}
+	// Gold 916 (22K): <span id="GoldRatesCompare916">12865</span>
+	if matches := regexp.MustCompile(`<span id="GoldRatesCompare916">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
+		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
+			data.gold916 = price
+		}
+	}
 
-// fetchSilverPriceFromAPI attempts to fetch silver price from external API
-func (p *IndianProvider) fetchSilverPriceFromAPI() (float64, error) {
-	// TODO: Implement silver price API
-	// For now, return error to use fallback
-	return 0, fmt.Errorf("silver price API not implemented")
-}
+	// Gold 750 (18K): <span id="GoldRatesCompare750">10534</span>
+	if matches := regexp.MustCompile(`<span id="GoldRatesCompare750">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
+		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
+			data.gold750 = price
+		}
+	}
 
-// fetchPlatinumPriceFromAPI attempts to fetch platinum price from external API
-func (p *IndianProvider) fetchPlatinumPriceFromAPI() (float64, error) {
-	// TODO: Implement platinum price API
-	// For now, return error to use fallback
-	return 0, fmt.Errorf("platinum price API not implemented")
+	// Gold 585 (14K): <span id="GoldRatesCompare585">8216</span>
+	if matches := regexp.MustCompile(`<span id="GoldRatesCompare585">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
+		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
+			data.gold585 = price
+		}
+	}
+
+	// Parse Silver 999 - from table (per 10 grams)
+	// Looking for: <span id="lblSilver999_PM">256776</span>
+	if matches := regexp.MustCompile(`<span id="lblSilver999_PM">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
+		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
+			data.silver999 = price / 10.0 // Convert from per 10g to per gram
+		}
+	}
+
+	// Parse Platinum 999 - from table (per 10 grams)
+	// Looking for: <span id="lblPlatinum999_PM">75690</span>
+	if matches := regexp.MustCompile(`<span id="lblPlatinum999_PM">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
+		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
+			data.platinum999 = price / 10.0 // Convert from per 10g to per gram
+		}
+	}
+
+	// Cache the data
+	p.ibjaCache = data
+	p.cacheTime = time.Now()
+
+	return data, nil
 }
