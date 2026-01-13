@@ -11,6 +11,7 @@ A unified Go library for accessing financial markets data across multiple exchan
 **Currently Supported:**
 - 🇮🇳 Indian equities (NSE)
 - 🇮🇳 Indian mutual funds (AMFI)
+- 💰 Precious metals (Gold, Silver, Platinum)
 
 **Coming Soon:**
 - 🇺🇸 US equities (NYSE, NASDAQ)
@@ -127,6 +128,30 @@ func main() {
 
     // Batch fetch
     navs, _ := mf.GetMultiple([]string{"119551", "119552"})
+}
+```
+
+### Metal Prices
+
+```go
+import "github.com/Vikramarjuna/findata-go/metals"
+
+func main() {
+    // Get specific metal price
+    goldPrice, _ := metals.Get(metals.Gold, "24K")
+    fmt.Printf("Gold 24K: ₹%.2f per gram\n", goldPrice.PricePerGram)
+
+    // Get all metal prices
+    allPrices, _ := metals.GetAll()
+    for _, price := range allPrices {
+        fmt.Printf("%s %s: ₹%.2f per gram\n",
+            price.Metal, price.Purity, price.PricePerGram)
+    }
+
+    // Supported metals and purities:
+    // Gold: 24K, 22K, 18K, 14K
+    // Silver: 999, 925
+    // Platinum: 999, 950
 }
 ```
 

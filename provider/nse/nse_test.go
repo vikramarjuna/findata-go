@@ -1,6 +1,7 @@
 package nse
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -809,5 +810,131 @@ func TestGet_SymbolNormalizationInRequest(t *testing.T) {
 
 	if symbolCaptured != "LOWERCASE" {
 		t.Errorf("Symbol query param = %s, want LOWERCASE", symbolCaptured)
+	}
+}
+
+// TestFlexibleStringArray tests the custom unmarshaling for pdSectorIndAll
+func TestFlexibleStringArray(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected []string
+	}{
+		{
+			name:     "Array of strings",
+			json:     `["NIFTY 50", "NIFTY IT"]`,
+			expected: []string{"NIFTY 50", "NIFTY IT"},
+		},
+		{
+			name:     "Single string (ETF case) - NA filtered out",
+			json:     `"NA"`,
+			expected: []string{},
+		},
+		{
+			name:     "Empty string",
+			json:     `""`,
+			expected: []string{},
+		},
+		{
+			name:     "Empty array",
+			json:     `[]`,
+			expected: []string{},
+		},
+		{
+			name:     "Array with NA - filtered out",
+			json:     `["NIFTY 50", "NA", "NIFTY IT"]`,
+			expected: []string{"NIFTY 50", "NIFTY IT"},
+		},
+		{
+			name:     "Valid single string",
+			json:     `"NIFTY 50"`,
+			expected: []string{"NIFTY 50"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var arr flexibleStringArray
+			err := json.Unmarshal([]byte(tt.json), &arr)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+
+			if len(arr) != len(tt.expected) {
+				t.Errorf("Length = %d, want %d", len(arr), len(tt.expected))
+				return
+			}
+
+			for i, val := range arr {
+				if val != tt.expected[i] {
+					t.Errorf("arr[%d] = %s, want %s", i, val, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+// TestGet_ETFSymbol tests fetching ETF symbols that return pdSectorIndAll as string
+func TestGet_ETFSymbol(t *testing.T) {
+	// Mock server that returns ETF-style response with pdSectorIndAll as string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		response := `{
+			"info": {
+				"symbol": "BANKBEES",
+				"companyName": "Nippon India ETF Nifty Bank BeES",
+				"industry": "Mutual Fund Scheme"
+			},
+			"metadata": {
+				"pdSectorIndAll": "NA"
+			},
+			"priceInfo": {
+				"lastPrice": 614.26,
+				"change": 1.5,
+				"pChange": 0.24,
+				"previousClose": 612.76,
+				"open": 613.0,
+				"intraDayHighLow": {
+					"max": 615.0,
+					"min": 612.0
+				},
+				"weekHighLow": {
+					"max": 650.0,
+					"min": 550.0
+				}
+			},
+			"preOpenMarket": {
+				"totalTradedVolume": 100000,
+				"totalTradedValue": 61426000
+			},
+			"industryInfo": {
+				"macro": "Financial Services",
+				"sector": "Financial Services",
+				"industry": "Mutual Fund Scheme"
+			}
+		}`
+		_, _ = w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	p := NewWithBaseURL(server.URL)
+	quote, err := p.Get("BANKBEES")
+
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	if quote.Symbol != "BANKBEES" {
+		t.Errorf("Symbol = %s, want BANKBEES", quote.Symbol)
+	}
+
+	// Check that pdSectorIndAll string "NA" was filtered out (empty array)
+	if len(quote.Indices) != 0 {
+		t.Errorf("Indices length = %d, want 0 (NA should be filtered out)", len(quote.Indices))
+	}
+
+	// Market cap should be "Other" for ETFs with no indices
+	if quote.Metadata["market_cap"] != "Other" {
+		t.Errorf("Market cap = %s, want Other", quote.Metadata["market_cap"])
 	}
 }

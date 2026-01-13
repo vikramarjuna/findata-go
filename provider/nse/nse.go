@@ -55,6 +55,42 @@ func (p *Provider) SupportsSymbol(symbol string) bool {
 	return matched
 }
 
+// flexibleStringArray handles both string and []string from JSON
+type flexibleStringArray []string
+
+// UnmarshalJSON implements custom unmarshaling to handle both string and []string
+func (f *flexibleStringArray) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as array first
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		// Filter out "NA" values
+		filtered := make([]string, 0, len(arr))
+		for _, val := range arr {
+			if val != "NA" && val != "" {
+				filtered = append(filtered, val)
+			}
+		}
+		*f = filtered
+		return nil
+	}
+
+	// If that fails, try as a single string
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		// Ignore "NA" and empty strings
+		if str != "" && str != "NA" {
+			*f = []string{str}
+		} else {
+			*f = []string{}
+		}
+		return nil
+	}
+
+	// If both fail, return empty array
+	*f = []string{}
+	return nil
+}
+
 // nseQuoteResponse represents the raw NSE API response
 type nseQuoteResponse struct {
 	Info struct {
@@ -63,7 +99,7 @@ type nseQuoteResponse struct {
 		Industry    string `json:"industry"`
 	} `json:"info"`
 	Metadata struct {
-		PdSectorIndAll []string `json:"pdSectorIndAll"`
+		PdSectorIndAll flexibleStringArray `json:"pdSectorIndAll"`
 	} `json:"metadata"`
 	PriceInfo struct {
 		LastPrice       float64     `json:"lastPrice"`
@@ -192,7 +228,7 @@ func (p *Provider) mapToQuote(result *nseQuoteResponse) *provider.Quote {
 		YearLow:       result.PriceInfo.WeekHighLow.Min,
 		Volume:        result.PreOpenMarket.TotalTradedVolume,
 		Value:         result.PreOpenMarket.TotalTradedValue,
-		Indices:       result.Metadata.PdSectorIndAll,
+		Indices:       []string(result.Metadata.PdSectorIndAll),
 	}
 
 	// Populate metadata with market cap classification
