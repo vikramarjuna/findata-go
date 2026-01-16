@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Metal Prices Demo ===\n")
+	fmt.Println("=== Metal Prices Demo ===")
 
 	// Example 1: Get specific metal price
 	fmt.Println("1. Get Gold 24K price:")
@@ -120,4 +120,3 @@ func main() {
 
 	fmt.Println("=== Demo Complete ===")
 }
-

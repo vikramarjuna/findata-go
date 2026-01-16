@@ -6,15 +6,102 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Vikramarjuna/findata-go/cache"
 	"github.com/Vikramarjuna/findata-go/config"
+	"github.com/Vikramarjuna/findata-go/internal/cache"
+	"github.com/Vikramarjuna/findata-go/internal/provider"
+	"github.com/Vikramarjuna/findata-go/internal/provider/nse"
 	"github.com/Vikramarjuna/findata-go/logger"
-	"github.com/Vikramarjuna/findata-go/provider"
-	"github.com/Vikramarjuna/findata-go/provider/nse"
 )
 
-// Quote is an alias for provider.Quote for convenience
-type Quote = provider.Quote
+// Quote represents a stock quote from any provider
+type Quote struct {
+	Symbol        string            `json:"symbol"`
+	Exchange      config.Exchange   `json:"exchange"`
+	CompanyName   string            `json:"company_name"`
+	Industry      string            `json:"industry"`
+	Sector        string            `json:"sector"`
+	LastPrice     float64           `json:"last_price"`
+	Currency      string            `json:"currency"`
+	Change        float64           `json:"change"`
+	PChange       float64           `json:"pchange"`
+	PreviousClose float64           `json:"previous_close"`
+	Open          float64           `json:"open"`
+	DayHigh       float64           `json:"day_high"`
+	DayLow        float64           `json:"day_low"`
+	YearHigh      float64           `json:"year_high"`
+	YearLow       float64           `json:"year_low"`
+	Volume        float64           `json:"volume"`
+	Value         float64           `json:"value"`
+	Indices       []string          `json:"indices,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+}
+
+// Error represents an equity fetch error
+type Error struct {
+	Message  string
+	Code     int
+	Provider string
+}
+
+func (e *Error) Error() string {
+	if e.Code > 0 {
+		return fmt.Sprintf("%s: %s (code: %d)", e.Provider, e.Message, e.Code)
+	}
+	return e.Provider + ": " + e.Message
+}
+
+// fromProviderQuote converts a provider.Quote to equity.Quote
+func fromProviderQuote(pq *provider.Quote) *Quote {
+	return &Quote{
+		Symbol:        pq.Symbol,
+		Exchange:      pq.Exchange,
+		CompanyName:   pq.CompanyName,
+		Industry:      pq.Industry,
+		Sector:        pq.Sector,
+		LastPrice:     pq.LastPrice,
+		Currency:      pq.Currency,
+		Change:        pq.Change,
+		PChange:       pq.PChange,
+		PreviousClose: pq.PreviousClose,
+		Open:          pq.Open,
+		DayHigh:       pq.DayHigh,
+		DayLow:        pq.DayLow,
+		YearHigh:      pq.YearHigh,
+		YearLow:       pq.YearLow,
+		Volume:        pq.Volume,
+		Value:         pq.Value,
+		Indices:       pq.Indices,
+		Metadata:      pq.Metadata,
+	}
+}
+
+// Fetcher is the interface for fetching equity quotes.
+// This interface allows for easy mocking in tests.
+type Fetcher interface {
+	// Get fetches a quote for a single symbol
+	Get(symbol string, opts ...Option) (*Quote, error)
+	// GetMultiple fetches quotes for multiple symbols
+	GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error)
+}
+
+// DefaultFetcher is the default implementation of Fetcher
+// that uses the package-level Get and GetMultiple functions
+type DefaultFetcher struct{}
+
+// NewFetcher creates a new DefaultFetcher
+func NewFetcher() Fetcher {
+	return &DefaultFetcher{}
+}
+
+// Get implements Fetcher.Get
+func (f *DefaultFetcher) Get(symbol string, opts ...Option) (*Quote, error) {
+	return Get(symbol, opts...)
+}
+
+// GetMultiple implements Fetcher.GetMultiple
+func (f *DefaultFetcher) GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) {
+	return GetMultiple(symbols, opts...)
+}
 
 // Options for customizing quote requests
 type Options struct {
@@ -180,11 +267,14 @@ func Get(symbol string, opts ...Option) (*Quote, error) {
 	}
 
 	// Fetch the quote
-	quote, err := p.Get(symbol)
+	pQuote, err := p.Get(symbol)
 	if err != nil {
 		logger.Error("failed to fetch quote from provider", "symbol", symbol, "provider", p.Name(), "error", err)
 		return nil, err
 	}
+
+	// Convert to equity.Quote
+	quote := fromProviderQuote(pQuote)
 
 	logger.Info("successfully fetched equity quote", "symbol", symbol, "exchange", quote.Exchange, "price", quote.LastPrice)
 
@@ -244,7 +334,8 @@ func GetMultiple(symbols []string, opts ...Option) (map[string]*Quote, []error) 
 	for p, syms := range providerSymbols {
 		logger.Debug("fetching from provider", "provider", p.Name(), "symbols_count", len(syms))
 		providerQuotes, providerErrors := p.GetMultiple(syms)
-		for symbol, quote := range providerQuotes {
+		for symbol, pQuote := range providerQuotes {
+			quote := fromProviderQuote(pQuote)
 			quotes[symbol] = quote
 			// Cache the result
 			c.Set(symbol, quote)

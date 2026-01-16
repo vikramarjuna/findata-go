@@ -28,6 +28,7 @@ type Price struct {
 }
 
 // Provider is the interface that metal price providers must implement
+// This is an internal interface for different data sources (e.g., IndianProvider)
 type Provider interface {
 	// GetPrice fetches the price for a specific metal and purity
 	GetPrice(metal MetalType, purity string) (*Price, error)
@@ -40,6 +41,34 @@ type Provider interface {
 
 	// Name returns the provider name
 	Name() string
+}
+
+// Fetcher is the interface for fetching metal prices.
+// This interface allows for easy mocking in tests.
+type Fetcher interface {
+	// Get fetches the price for a specific metal and purity
+	Get(metal MetalType, purity string, opts ...Option) (*Price, error)
+	// GetAll fetches prices for all supported metals and purities
+	GetAll(opts ...Option) ([]*Price, error)
+}
+
+// DefaultFetcher is the default implementation of Fetcher
+// that uses the package-level Get and GetAll functions
+type DefaultFetcher struct{}
+
+// NewFetcher creates a new DefaultFetcher
+func NewFetcher() Fetcher {
+	return &DefaultFetcher{}
+}
+
+// Get implements Fetcher.Get
+func (f *DefaultFetcher) Get(metal MetalType, purity string, opts ...Option) (*Price, error) {
+	return Get(metal, purity, opts...)
+}
+
+// GetAll implements Fetcher.GetAll
+func (f *DefaultFetcher) GetAll(opts ...Option) ([]*Price, error) {
+	return GetAll(opts...)
 }
 
 // Options for fetching metal prices

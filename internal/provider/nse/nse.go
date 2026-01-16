@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/Vikramarjuna/findata-go/config"
+	"github.com/Vikramarjuna/findata-go/internal/provider"
 	"github.com/Vikramarjuna/findata-go/logger"
-	"github.com/Vikramarjuna/findata-go/provider"
 )
 
 const (

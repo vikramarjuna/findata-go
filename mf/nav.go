@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Vikramarjuna/findata-go/cache"
 	"github.com/Vikramarjuna/findata-go/config"
+	"github.com/Vikramarjuna/findata-go/internal/cache"
 	"github.com/Vikramarjuna/findata-go/logger"
 )
 
@@ -20,6 +20,55 @@ const (
 	// Cache key for all NAVs
 	cacheKeyAllNAVs = "mf:all_navs"
 )
+
+// Fetcher is the interface for fetching mutual fund NAV data.
+// This interface allows for easy mocking in tests.
+type Fetcher interface {
+	// Get fetches NAV for a specific scheme by code, name, or ISIN
+	Get(identifier string) (*NAV, error)
+	// GetAll fetches all NAVs from AMFI portal
+	GetAll() (map[string]*NAV, error)
+	// Search searches for mutual funds by name
+	Search(query string) ([]*NAV, error)
+	// GetMultiple fetches NAVs for multiple identifiers
+	GetMultiple(identifiers []string) (map[string]*NAV, []error)
+	// Find searches for a mutual fund NAV using multiple strategies
+	Find(name string, options FindOptions) (*NAV, error)
+}
+
+// DefaultFetcher is the default implementation of Fetcher
+// that uses the package-level functions
+type DefaultFetcher struct{}
+
+// NewFetcher creates a new DefaultFetcher
+func NewFetcher() Fetcher {
+	return &DefaultFetcher{}
+}
+
+// Get implements Fetcher.Get
+func (f *DefaultFetcher) Get(identifier string) (*NAV, error) {
+	return Get(identifier)
+}
+
+// GetAll implements Fetcher.GetAll
+func (f *DefaultFetcher) GetAll() (map[string]*NAV, error) {
+	return GetAll()
+}
+
+// Search implements Fetcher.Search
+func (f *DefaultFetcher) Search(query string) ([]*NAV, error) {
+	return Search(query)
+}
+
+// GetMultiple implements Fetcher.GetMultiple
+func (f *DefaultFetcher) GetMultiple(identifiers []string) (map[string]*NAV, []error) {
+	return GetMultiple(identifiers)
+}
+
+// Find implements Fetcher.Find
+func (f *DefaultFetcher) Find(name string, options FindOptions) (*NAV, error) {
+	return Find(name, options)
+}
 
 // Global cache instance
 var (

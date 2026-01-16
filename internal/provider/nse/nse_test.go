@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Vikramarjuna/findata-go/config"
-	"github.com/Vikramarjuna/findata-go/provider"
+	"github.com/Vikramarjuna/findata-go/internal/provider"
 )
 
 const (
