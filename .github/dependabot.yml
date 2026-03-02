@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    labels:
+      - "go"
+      - "dependencies"
+      - "pr/no-changelog"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: github-actions
+    open-pull-requests-limit: 5
+    directory: /
+    labels:
+      - "github_actions"
+      - "dependencies"
+      - "pr/no-changelog"
+    schedule:
+      interval: "weekly"
