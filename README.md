@@ -12,6 +12,7 @@ A unified Go library for accessing financial markets data across multiple exchan
 - 🇮🇳 Indian equities (NSE)
 - 🇮🇳 Indian mutual funds (AMFI)
 - 💰 Precious metals (Gold, Silver, Platinum)
+- 🪙 Cryptocurrencies (Bitcoin, Ethereum, Solana, and more)
 
 **Coming Soon:**
 - 🇺🇸 US equities (NYSE, NASDAQ)
@@ -152,6 +153,33 @@ func main() {
     // Gold: 24K, 22K, 18K, 14K
     // Silver: 999, 925
     // Platinum: 999, 950
+}
+```
+
+### Cryptocurrency Quotes
+
+```go
+import "github.com/Vikramarjuna/findata-go/crypto"
+
+func main() {
+    // Get specific crypto quote in USD
+    btcQuote, _ := crypto.Get("bitcoin")
+    fmt.Printf("Bitcoin: $%.2f\n", btcQuote.CurrentPrice)
+    fmt.Printf("24h Change: %.2f%%\n", btcQuote.PriceChangePct24h)
+
+    // Get crypto quote in different currency
+    ethQuote, _ := crypto.Get("ethereum", crypto.WithCurrency("INR"))
+    fmt.Printf("Ethereum: ₹%.2f\n", ethQuote.CurrentPrice)
+
+    // Get multiple crypto quotes
+    coinIDs := []string{"bitcoin", "ethereum", "solana"}
+    quotes, _ := crypto.GetMultiple(coinIDs)
+    for coinID, quote := range quotes {
+        fmt.Printf("%s: $%.2f\n", coinID, quote.CurrentPrice)
+    }
+
+    // Use CoinGecko coin IDs (e.g., "bitcoin", "ethereum", "solana", "cardano", etc.)
+    // See https://www.coingecko.com/ for full list of supported coins
 }
 ```
 
