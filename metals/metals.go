@@ -10,9 +10,13 @@ import (
 // MetalType represents the type of metal
 type MetalType string
 
+// Supported metal types
 const (
-	Gold     MetalType = "GOLD"
-	Silver   MetalType = "SILVER"
+	// Gold represents gold metal
+	Gold MetalType = "GOLD"
+	// Silver represents silver metal
+	Silver MetalType = "SILVER"
+	// Platinum represents platinum metal
 	Platinum MetalType = "PLATINUM"
 )
 

@@ -34,31 +34,33 @@ func TestGet(t *testing.T) {
 				return
 			}
 
-			if !tt.wantErr {
-				if price == nil {
-					t.Error("Get() returned nil price")
-					return
-				}
+			if tt.wantErr {
+				return
+			}
 
-				if price.Metal != tt.metal {
-					t.Errorf("Metal = %v, want %v", price.Metal, tt.metal)
-				}
+			if price == nil {
+				t.Error("Get() returned nil price")
+				return
+			}
 
-				if price.Purity != tt.purity {
-					t.Errorf("Purity = %v, want %v", price.Purity, tt.purity)
-				}
+			if price.Metal != tt.metal {
+				t.Errorf("Metal = %v, want %v", price.Metal, tt.metal)
+			}
 
-				if price.PricePerGram <= 0 {
-					t.Errorf("PricePerGram = %v, want > 0", price.PricePerGram)
-				}
+			if price.Purity != tt.purity {
+				t.Errorf("Purity = %v, want %v", price.Purity, tt.purity)
+			}
 
-				if price.Currency != "INR" {
-					t.Errorf("Currency = %v, want INR", price.Currency)
-				}
+			if price.PricePerGram <= 0 {
+				t.Errorf("PricePerGram = %v, want > 0", price.PricePerGram)
+			}
 
-				if price.UpdatedAt.IsZero() {
-					t.Error("UpdatedAt is zero")
-				}
+			if price.Currency != "INR" {
+				t.Errorf("Currency = %v, want INR", price.Currency)
+			}
+
+			if price.UpdatedAt.IsZero() {
+				t.Error("UpdatedAt is zero")
 			}
 		})
 	}
@@ -163,4 +165,3 @@ func TestPriceRelationships(t *testing.T) {
 		t.Error("22K gold should be more expensive than 18K")
 	}
 }
-

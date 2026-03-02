@@ -1,6 +1,7 @@
 package metals
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -128,55 +129,8 @@ func (p *IndianProvider) getGoldPrice(purity string) (*Price, error) {
 	// Fetch IBJA data (cached)
 	data, err := p.fetchIBJAData()
 
-	var pricePerGram float64
-	var useFallback bool
-
-	// Get price based on purity from IBJA data
-	switch purity {
-	case "24K":
-		if err != nil || data.gold999 == 0 {
-			pricePerGram = 14000.0 // Fallback
-			useFallback = true
-		} else {
-			pricePerGram = data.gold999
-		}
-	case "22K":
-		if err != nil || data.gold916 == 0 {
-			// Fallback: calculate from 24K
-			base := 14000.0
-			if data.gold999 > 0 {
-				base = data.gold999
-			}
-			pricePerGram = base * 0.916
-			useFallback = true
-		} else {
-			pricePerGram = data.gold916
-		}
-	case "18K":
-		if err != nil || data.gold750 == 0 {
-			// Fallback: calculate from 24K
-			base := 14000.0
-			if data.gold999 > 0 {
-				base = data.gold999
-			}
-			pricePerGram = base * 0.750
-			useFallback = true
-		} else {
-			pricePerGram = data.gold750
-		}
-	case "14K":
-		if err != nil || data.gold585 == 0 {
-			// Fallback: calculate from 24K
-			base := 14000.0
-			if data.gold999 > 0 {
-				base = data.gold999
-			}
-			pricePerGram = base * 0.585
-			useFallback = true
-		} else {
-			pricePerGram = data.gold585
-		}
-	default:
+	pricePerGram := p.getGoldPriceByPurity(purity, data, err)
+	if pricePerGram == 0 {
 		return nil, &Error{
 			Message:  fmt.Sprintf("unsupported gold purity: %s", purity),
 			Metal:    Gold,
@@ -184,8 +138,6 @@ func (p *IndianProvider) getGoldPrice(purity string) (*Price, error) {
 			Provider: p.Name(),
 		}
 	}
-
-	_ = useFallback // Suppress unused variable warning
 
 	return &Price{
 		Metal:        Gold,
@@ -195,6 +147,35 @@ func (p *IndianProvider) getGoldPrice(purity string) (*Price, error) {
 		Source:       p.Name(),
 		UpdatedAt:    time.Now(),
 	}, nil
+}
+
+// getGoldPriceByPurity returns the gold price for a specific purity
+func (p *IndianProvider) getGoldPriceByPurity(purity string, data *ibjaData, fetchErr error) float64 {
+	switch purity {
+	case "24K":
+		return p.getGoldPriceWithFallback(data.gold999, 1.000, data, fetchErr)
+	case "22K":
+		return p.getGoldPriceWithFallback(data.gold916, 0.916, data, fetchErr)
+	case "18K":
+		return p.getGoldPriceWithFallback(data.gold750, 0.750, data, fetchErr)
+	case "14K":
+		return p.getGoldPriceWithFallback(data.gold585, 0.585, data, fetchErr)
+	default:
+		return 0
+	}
+}
+
+// getGoldPriceWithFallback returns the price or calculates a fallback
+func (p *IndianProvider) getGoldPriceWithFallback(price, multiplier float64, data *ibjaData, fetchErr error) float64 {
+	if fetchErr == nil && price > 0 {
+		return price
+	}
+	// Fallback: calculate from 24K base
+	base := 14000.0
+	if data != nil && data.gold999 > 0 {
+		base = data.gold999
+	}
+	return base * multiplier
 }
 
 // getSilverPrice fetches silver price for a specific purity
@@ -290,90 +271,77 @@ func (p *IndianProvider) fetchIBJAData() (*ibjaData, error) {
 		return p.ibjaCache, nil
 	}
 
-	url := "https://ibjarates.com/"
-
-	req, err := http.NewRequest("GET", url, nil)
+	html, err := p.fetchIBJAHTML()
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
+		return nil, err
 	}
-
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching IBJA data: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("IBJA returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
-	}
-
-	html := string(body)
 
 	// Parse all metal prices from the HTML
-	data := &ibjaData{}
-
-	// Parse Gold prices - per gram prices from GoldRatesCompare spans
-	// Gold 999 (24K): <span id="GoldRatesCompare999">14045</span>
-	if matches := regexp.MustCompile(`<span id="GoldRatesCompare999">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
-		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
-			data.gold999 = price
-		}
-	}
-
-	// Gold 995: <span id="GoldRatesCompare995">13989</span>
-	if matches := regexp.MustCompile(`<span id="GoldRatesCompare995">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
-		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
-			data.gold995 = price
-		}
-	}
-
-	// Gold 916 (22K): <span id="GoldRatesCompare916">12865</span>
-	if matches := regexp.MustCompile(`<span id="GoldRatesCompare916">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
-		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
-			data.gold916 = price
-		}
-	}
-
-	// Gold 750 (18K): <span id="GoldRatesCompare750">10534</span>
-	if matches := regexp.MustCompile(`<span id="GoldRatesCompare750">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
-		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
-			data.gold750 = price
-		}
-	}
-
-	// Gold 585 (14K): <span id="GoldRatesCompare585">8216</span>
-	if matches := regexp.MustCompile(`<span id="GoldRatesCompare585">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
-		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
-			data.gold585 = price
-		}
-	}
-
-	// Parse Silver 999 - from table (per 10 grams)
-	// Looking for: <span id="lblSilver999_PM">256776</span>
-	if matches := regexp.MustCompile(`<span id="lblSilver999_PM">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
-		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
-			data.silver999 = price / 10.0 // Convert from per 10g to per gram
-		}
-	}
-
-	// Parse Platinum 999 - from table (per 10 grams)
-	// Looking for: <span id="lblPlatinum999_PM">75690</span>
-	if matches := regexp.MustCompile(`<span id="lblPlatinum999_PM">([0-9]+)</span>`).FindStringSubmatch(html); len(matches) >= 2 {
-		if price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64); err == nil {
-			data.platinum999 = price / 10.0 // Convert from per 10g to per gram
-		}
-	}
+	data := p.parseIBJAHTML(html)
 
 	// Cache the data
 	p.ibjaCache = data
 	p.cacheTime = time.Now()
 
 	return data, nil
+}
+
+// fetchIBJAHTML fetches the HTML from IBJA website
+func (p *IndianProvider) fetchIBJAHTML() (string, error) {
+	url := "https://ibjarates.com/"
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, http.NoBody)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error fetching IBJA data: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("IBJA returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %v", err)
+	}
+
+	return string(body), nil
+}
+
+// parseIBJAHTML parses metal prices from IBJA HTML
+func (p *IndianProvider) parseIBJAHTML(html string) *ibjaData {
+	data := &ibjaData{}
+
+	// Parse Gold prices - per gram prices from GoldRatesCompare spans
+	data.gold999 = p.extractPrice(html, `<span id="GoldRatesCompare999">(\d+)</span>`, 1.0)
+	data.gold995 = p.extractPrice(html, `<span id="GoldRatesCompare995">(\d+)</span>`, 1.0)
+	data.gold916 = p.extractPrice(html, `<span id="GoldRatesCompare916">(\d+)</span>`, 1.0)
+	data.gold750 = p.extractPrice(html, `<span id="GoldRatesCompare750">(\d+)</span>`, 1.0)
+	data.gold585 = p.extractPrice(html, `<span id="GoldRatesCompare585">(\d+)</span>`, 1.0)
+
+	// Parse Silver and Platinum - from table (per 10 grams, convert to per gram)
+	data.silver999 = p.extractPrice(html, `<span id="lblSilver999_PM">(\d+)</span>`, 0.1)
+	data.platinum999 = p.extractPrice(html, `<span id="lblPlatinum999_PM">(\d+)</span>`, 0.1)
+
+	return data
+}
+
+// extractPrice extracts and parses a price from HTML using regex
+func (p *IndianProvider) extractPrice(html, pattern string, multiplier float64) float64 {
+	matches := regexp.MustCompile(pattern).FindStringSubmatch(html)
+	if len(matches) < 2 {
+		return 0
+	}
+	price, err := strconv.ParseFloat(strings.TrimSpace(matches[1]), 64)
+	if err != nil {
+		return 0
+	}
+	return price * multiplier
 }

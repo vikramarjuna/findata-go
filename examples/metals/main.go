@@ -1,3 +1,4 @@
+// Package main demonstrates the usage of the metals package for fetching precious metal prices.
 package main
 
 import (
