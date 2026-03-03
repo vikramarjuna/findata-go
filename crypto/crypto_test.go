@@ -1,4 +1,4 @@
-package crypto
+package crypto // nolint:revive // crypto refers to cryptocurrency, not the standard library crypto package
 
 import (
 	"testing"

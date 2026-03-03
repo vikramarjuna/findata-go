@@ -68,7 +68,7 @@ func (p *Provider) GetPrice(coinID, currency string) (map[string]any, error) {
 	apiURL.RawQuery = query.Encode()
 
 	// Make request
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL.String(), nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL.String(), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -131,7 +131,7 @@ func (p *Provider) GetMultiplePrices(coinIDs []string, currency string) (map[str
 	apiURL.RawQuery = query.Encode()
 
 	// Make request
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL.String(), nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL.String(), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
