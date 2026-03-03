@@ -245,22 +245,22 @@ func TestQuoteFields(t *testing.T) {
 	// Test all fields are populated correctly
 	tests := []struct {
 		name  string
-		value interface{}
-		check func(interface{}) bool
+		value any
+		check func(any) bool
 	}{
-		{"Symbol", quote.Symbol, func(v interface{}) bool { return v.(string) == testSymbol }},
-		{"Exchange", quote.Exchange, func(v interface{}) bool { return v.(config.Exchange) == config.ExchangeNSE }},
-		{"Currency", quote.Currency, func(v interface{}) bool { return v.(string) == testCurrency }},
-		{"CompanyName", quote.CompanyName, func(v interface{}) bool { return v.(string) != "" }},
-		{"Industry", quote.Industry, func(v interface{}) bool { return v.(string) != "" }},
-		{"Sector", quote.Sector, func(v interface{}) bool { return v.(string) != "" }},
-		{"LastPrice", quote.LastPrice, func(v interface{}) bool { return v.(float64) > 0 }},
-		{"PreviousClose", quote.PreviousClose, func(v interface{}) bool { return v.(float64) > 0 }},
-		{"Open", quote.Open, func(v interface{}) bool { return v.(float64) >= 0 }},
-		{"DayHigh", quote.DayHigh, func(v interface{}) bool { return v.(float64) >= 0 }},
-		{"DayLow", quote.DayLow, func(v interface{}) bool { return v.(float64) >= 0 }},
-		{"YearHigh", quote.YearHigh, func(v interface{}) bool { return v.(float64) >= 0 }},
-		{"YearLow", quote.YearLow, func(v interface{}) bool { return v.(float64) >= 0 }},
+		{"Symbol", quote.Symbol, func(v any) bool { return v.(string) == testSymbol }},
+		{"Exchange", quote.Exchange, func(v any) bool { return v.(config.Exchange) == config.ExchangeNSE }},
+		{"Currency", quote.Currency, func(v any) bool { return v.(string) == testCurrency }},
+		{"CompanyName", quote.CompanyName, func(v any) bool { return v.(string) != "" }},
+		{"Industry", quote.Industry, func(v any) bool { return v.(string) != "" }},
+		{"Sector", quote.Sector, func(v any) bool { return v.(string) != "" }},
+		{"LastPrice", quote.LastPrice, func(v any) bool { return v.(float64) > 0 }},
+		{"PreviousClose", quote.PreviousClose, func(v any) bool { return v.(float64) > 0 }},
+		{"Open", quote.Open, func(v any) bool { return v.(float64) >= 0 }},
+		{"DayHigh", quote.DayHigh, func(v any) bool { return v.(float64) >= 0 }},
+		{"DayLow", quote.DayLow, func(v any) bool { return v.(float64) >= 0 }},
+		{"YearHigh", quote.YearHigh, func(v any) bool { return v.(float64) >= 0 }},
+		{"YearLow", quote.YearLow, func(v any) bool { return v.(float64) >= 0 }},
 	}
 
 	for _, tt := range tests {

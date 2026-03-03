@@ -106,7 +106,7 @@ func Get(metal MetalType, purity string, opts ...Option) (*Price, error) {
 	purity = strings.ToUpper(purity)
 
 	// Check cache first
-	cacheKey := fmt.Sprintf("%s_%s_%s", metal, purity, options.Currency)
+	cacheKey := string(metal) + "_" + purity + "_" + options.Currency
 	c := getCache()
 	if cached, ok := c.Get(cacheKey); ok {
 		if price, ok := cached.(*Price); ok {
@@ -140,7 +140,7 @@ func GetAll(opts ...Option) ([]*Price, error) {
 	}
 
 	// Check cache first
-	cacheKey := fmt.Sprintf("all_%s", options.Currency)
+	cacheKey := "all_" + options.Currency
 	c := getCache()
 	if cached, ok := c.Get(cacheKey); ok {
 		if prices, ok := cached.([]*Price); ok {

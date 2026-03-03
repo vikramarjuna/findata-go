@@ -14,7 +14,7 @@ type Cache struct {
 }
 
 type cacheItem struct {
-	value      interface{}
+	value      any
 	expiration time.Time
 }
 
@@ -42,7 +42,7 @@ func getCache() *Cache {
 }
 
 // Get retrieves a value from the cache
-func (c *Cache) Get(key string) (interface{}, bool) {
+func (c *Cache) Get(key string) (any, bool) {
 	if !c.enabled {
 		return nil, false
 	}
@@ -64,7 +64,7 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 }
 
 // Set stores a value in the cache
-func (c *Cache) Set(key string, value interface{}) {
+func (c *Cache) Set(key string, value any) {
 	if !c.enabled {
 		return
 	}
@@ -124,4 +124,3 @@ func DisableCache() {
 func EnableCache() {
 	getCache().SetEnabled(true)
 }
-

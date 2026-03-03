@@ -2,10 +2,12 @@
 package coingecko
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Vikramarjuna/findata-go/config"
@@ -46,16 +48,32 @@ func (p *Provider) Name() string {
 // GetPrice fetches the price for a specific cryptocurrency
 // coinID should be the CoinGecko coin ID (e.g., "bitcoin", "ethereum", "solana")
 // currency is the fiat currency (e.g., "USD", "INR")
-func (p *Provider) GetPrice(coinID, currency string) (map[string]interface{}, error) {
+func (p *Provider) GetPrice(coinID, currency string) (map[string]any, error) {
 	// Normalize coin ID to lowercase
 	coinID = strings.ToLower(coinID)
 
 	// Build URL
-	url := fmt.Sprintf("%s/simple/price?ids=%s&vs_currencies=%s&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true",
-		p.baseURL, coinID, strings.ToLower(currency))
+	apiURL, err := url.Parse(p.baseURL + "/simple/price")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse base URL: %w", err)
+	}
+
+	query := apiURL.Query()
+	query.Set("ids", coinID)
+	query.Set("vs_currencies", strings.ToLower(currency))
+	query.Set("include_market_cap", "true")
+	query.Set("include_24hr_vol", "true")
+	query.Set("include_24hr_change", "true")
+	query.Set("include_last_updated_at", "true")
+	apiURL.RawQuery = query.Encode()
 
 	// Make request
-	resp, err := p.client.Get(url)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch price: %w", err)
 	}
@@ -67,7 +85,7 @@ func (p *Provider) GetPrice(coinID, currency string) (map[string]interface{}, er
 	}
 
 	// Parse response
-	var result map[string]map[string]interface{}
+	var result map[string]map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -86,9 +104,9 @@ func (p *Provider) GetPrice(coinID, currency string) (map[string]interface{}, er
 
 // GetMultiplePrices fetches prices for multiple cryptocurrencies
 // coinIDs should be CoinGecko coin IDs (e.g., ["bitcoin", "ethereum", "solana"])
-func (p *Provider) GetMultiplePrices(coinIDs []string, currency string) (map[string]map[string]interface{}, error) {
+func (p *Provider) GetMultiplePrices(coinIDs []string, currency string) (map[string]map[string]any, error) {
 	if len(coinIDs) == 0 {
-		return make(map[string]map[string]interface{}), nil
+		return make(map[string]map[string]any), nil
 	}
 
 	// Normalize coin IDs to lowercase
@@ -98,11 +116,27 @@ func (p *Provider) GetMultiplePrices(coinIDs []string, currency string) (map[str
 	}
 
 	// Build URL
-	url := fmt.Sprintf("%s/simple/price?ids=%s&vs_currencies=%s&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true",
-		p.baseURL, strings.Join(normalizedIDs, ","), strings.ToLower(currency))
+	apiURL, err := url.Parse(p.baseURL + "/simple/price")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse base URL: %w", err)
+	}
+
+	query := apiURL.Query()
+	query.Set("ids", strings.Join(normalizedIDs, ","))
+	query.Set("vs_currencies", strings.ToLower(currency))
+	query.Set("include_market_cap", "true")
+	query.Set("include_24hr_vol", "true")
+	query.Set("include_24hr_change", "true")
+	query.Set("include_last_updated_at", "true")
+	apiURL.RawQuery = query.Encode()
 
 	// Make request
-	resp, err := p.client.Get(url)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch prices: %w", err)
 	}
@@ -114,7 +148,7 @@ func (p *Provider) GetMultiplePrices(coinIDs []string, currency string) (map[str
 	}
 
 	// Parse response
-	var result map[string]map[string]interface{}
+	var result map[string]map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -128,7 +162,7 @@ func (p *Provider) GetMultiplePrices(coinIDs []string, currency string) (map[str
 }
 
 // GetFloat safely extracts a float64 from the response data
-func GetFloat(data map[string]interface{}, key string) float64 {
+func GetFloat(data map[string]any, key string) float64 {
 	if val, ok := data[key]; ok {
 		if f, ok := val.(float64); ok {
 			return f

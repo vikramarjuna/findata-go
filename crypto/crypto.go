@@ -35,13 +35,13 @@ var (
 // Default cache TTL for crypto prices (1 minute - crypto prices change frequently)
 const defaultCacheTTL = 1 * time.Minute
 
-// Fetcher is the interface for fetching crypto prices.
+// Fetcher is the interface for fetching crypto quotes.
 // This interface allows for easy mocking in tests.
 type Fetcher interface {
-	// Get fetches the price for a specific cryptocurrency
-	Get(coinId string, opts ...Option) (*Quote, error)
-	// GetMultiple fetches prices for multiple cryptocurrencies
-	GetMultiple(coinIds []string, opts ...Option) (map[string]*Quote, error)
+	// Get fetches the quote for a specific cryptocurrency
+	Get(coinID string, opts ...Option) (*Quote, error)
+	// GetMultiple fetches quotes for multiple cryptocurrencies
+	GetMultiple(coinIDs []string, opts ...Option) (map[string]*Quote, error)
 }
 
 // DefaultFetcher is the default implementation of Fetcher
@@ -53,13 +53,13 @@ func NewFetcher() Fetcher {
 }
 
 // Get implements Fetcher.Get
-func (f *DefaultFetcher) Get(coinId string, opts ...Option) (*Quote, error) {
-	return Get(coinId, opts...)
+func (f *DefaultFetcher) Get(coinID string, opts ...Option) (*Quote, error) {
+	return Get(coinID, opts...)
 }
 
 // GetMultiple implements Fetcher.GetMultiple
-func (f *DefaultFetcher) GetMultiple(coinIds []string, opts ...Option) (map[string]*Quote, error) {
-	return GetMultiple(coinIds, opts...)
+func (f *DefaultFetcher) GetMultiple(coinIDs []string, opts ...Option) (map[string]*Quote, error) {
+	return GetMultiple(coinIDs, opts...)
 }
 
 // Options for fetching crypto prices
@@ -78,8 +78,8 @@ func WithCurrency(currency string) Option {
 }
 
 // Get fetches the quote for a specific cryptocurrency
-// Example: Get("BTC") or Get("ETH", WithCurrency("INR"))
-func Get(coinId string, opts ...Option) (*Quote, error) {
+// Example: Get("bitcoin") or Get("ethereum", WithCurrency("INR"))
+func Get(coinID string, opts ...Option) (*Quote, error) {
 	// Apply options
 	options := &Options{
 		Currency: "USD", // Default to USD
@@ -89,11 +89,11 @@ func Get(coinId string, opts ...Option) (*Quote, error) {
 	}
 
 	// Normalize inputs
-	coinId = strings.ToUpper(coinId)
+	coinID = strings.ToLower(coinID)
 	options.Currency = strings.ToUpper(options.Currency)
 
 	// Check cache first
-	cacheKey := fmt.Sprintf("%s_%s", coinId, options.Currency)
+	cacheKey := coinID + "_" + options.Currency
 	c := getCache()
 	if cached, ok := c.Get(cacheKey); ok {
 		if quote, ok := cached.(*Quote); ok {
@@ -105,18 +105,18 @@ func Get(coinId string, opts ...Option) (*Quote, error) {
 	provider := getProvider()
 
 	// Fetch quote data from provider
-	data, err := provider.GetPrice(coinId, options.Currency)
+	data, err := provider.GetPrice(coinID, options.Currency)
 	if err != nil {
 		return nil, &Error{
 			Message:  err.Error(),
-			CoinID:   coinId,
+			CoinID:   coinID,
 			Currency: options.Currency,
 			Provider: provider.Name(),
 		}
 	}
 
 	// Convert to Quote struct
-	quote := dataToQuote(coinId, options.Currency, data, provider.Name())
+	quote := dataToQuote(coinID, options.Currency, data, provider.Name())
 
 	// Cache the result
 	c.Set(cacheKey, quote)
@@ -125,8 +125,7 @@ func Get(coinId string, opts ...Option) (*Quote, error) {
 }
 
 // GetMultiple fetches quotes for multiple cryptocurrencies
-// Example: GetMultiple([]string{"BTC", "ETH"}, WithCurrency("INR"))
-func GetMultiple(coinIds []string, opts ...Option) (map[string]*Quote, error) {
+func GetMultiple(coinIDs []string, opts ...Option) (map[string]*Quote, error) {
 	// Apply options
 	options := &Options{
 		Currency: "USD",
@@ -138,17 +137,17 @@ func GetMultiple(coinIds []string, opts ...Option) (map[string]*Quote, error) {
 	// Normalize currency
 	options.Currency = strings.ToUpper(options.Currency)
 
-	// Normalize symbols
-	normalizedSymbols := make([]string, len(coinIds))
-	for i, symbol := range coinIds {
-		normalizedSymbols[i] = strings.ToUpper(symbol)
+	// Normalize coin IDs
+	normalizedIDs := make([]string, len(coinIDs))
+	for i, id := range coinIDs {
+		normalizedIDs[i] = strings.ToLower(id)
 	}
 
 	// Get provider
 	provider := getProvider()
 
 	// Fetch quotes data from provider
-	dataMap, err := provider.GetMultiplePrices(normalizedSymbols, options.Currency)
+	dataMap, err := provider.GetMultiplePrices(normalizedIDs, options.Currency)
 	if err != nil {
 		return nil, &Error{
 			Message:  err.Error(),
@@ -166,7 +165,7 @@ func GetMultiple(coinIds []string, opts ...Option) (map[string]*Quote, error) {
 	// Cache the results
 	c := getCache()
 	for symbol, quote := range quotes {
-		cacheKey := fmt.Sprintf("%s_%s", symbol, options.Currency)
+		cacheKey := symbol + "_" + options.Currency
 		c.Set(cacheKey, quote)
 	}
 
@@ -201,7 +200,7 @@ func getProvider() *coingecko.Provider {
 }
 
 // dataToQuote converts provider data to Quote struct
-func dataToQuote(coinID, currency string, data map[string]interface{}, providerName string) *Quote {
+func dataToQuote(coinID, currency string, data map[string]any, providerName string) *Quote {
 	currencyLower := strings.ToLower(currency)
 
 	return &Quote{
@@ -218,7 +217,7 @@ func dataToQuote(coinID, currency string, data map[string]interface{}, providerN
 }
 
 // getString safely extracts a string from the response data
-func getString(data map[string]interface{}, key string) string {
+func getString(data map[string]any, key string) string {
 	if val, ok := data[key]; ok {
 		if s, ok := val.(string); ok {
 			return s

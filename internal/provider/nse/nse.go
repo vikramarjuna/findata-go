@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -102,12 +103,12 @@ type nseQuoteResponse struct {
 		PdSectorIndAll flexibleStringArray `json:"pdSectorIndAll"`
 	} `json:"metadata"`
 	PriceInfo struct {
-		LastPrice       float64     `json:"lastPrice"`
-		Change          float64     `json:"change"`
-		PChange         float64     `json:"pChange"`
-		PreviousClose   float64     `json:"previousClose"`
-		Open            float64     `json:"open"`
-		Close           interface{} `json:"close"`
+		LastPrice       float64 `json:"lastPrice"`
+		Change          float64 `json:"change"`
+		PChange         float64 `json:"pChange"`
+		PreviousClose   float64 `json:"previousClose"`
+		Open            float64 `json:"open"`
+		Close           any     `json:"close"`
 		IntraDayHighLow struct {
 			Max float64 `json:"max"`
 			Min float64 `json:"min"`
@@ -147,14 +148,25 @@ func (p *Provider) Get(symbol string) (*provider.Quote, error) {
 }
 
 func (p *Provider) fetchNSEData(symbol string) (*nseQuoteResponse, error) {
-	url := fmt.Sprintf("%s%s?symbol=%s", p.baseURL, QuoteEndpoint, symbol)
-	logger.Debug("creating NSE API request", "url", url, "symbol", symbol)
+	apiURL, err := url.Parse(p.baseURL + QuoteEndpoint)
+	if err != nil {
+		return nil, &provider.Error{
+			Message:  "failed to parse base URL: " + err.Error(),
+			Provider: p.Name(),
+		}
+	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", url, http.NoBody)
+	query := apiURL.Query()
+	query.Set("symbol", symbol)
+	apiURL.RawQuery = query.Encode()
+
+	logger.Debug("creating NSE API request", "url", apiURL.String(), "symbol", symbol)
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", apiURL.String(), http.NoBody)
 	if err != nil {
 		logger.Error("failed to create NSE request", "error", err, "symbol", symbol)
 		return nil, &provider.Error{
-			Message:  fmt.Sprintf("failed to create request: %v", err),
+			Message:  "failed to create request: " + err.Error(),
 			Provider: p.Name(),
 		}
 	}
@@ -167,9 +179,9 @@ func (p *Provider) fetchNSEData(symbol string) (*nseQuoteResponse, error) {
 	logger.Debug("sending HTTP request to NSE", "symbol", symbol)
 	resp, err := config.GetHTTPClient().Do(req)
 	if err != nil {
-		logger.Error("NSE HTTP request failed", "error", err, "symbol", symbol, "url", url)
+		logger.Error("NSE HTTP request failed", "error", err, "symbol", symbol, "url", apiURL.String())
 		return nil, &provider.Error{
-			Message:  fmt.Sprintf("HTTP request failed: %v", err),
+			Message:  "HTTP request failed: " + err.Error(),
 			Provider: p.Name(),
 		}
 	}
@@ -181,7 +193,7 @@ func (p *Provider) fetchNSEData(symbol string) (*nseQuoteResponse, error) {
 		body, _ := io.ReadAll(resp.Body)
 		logger.Warn("NSE API returned non-OK status", "status_code", resp.StatusCode, "symbol", symbol, "response", string(body))
 		return nil, &provider.Error{
-			Message:  fmt.Sprintf("NSE API returned error: %s", string(body)),
+			Message:  "NSE API returned error: " + string(body),
 			Code:     resp.StatusCode,
 			Provider: p.Name(),
 		}
@@ -191,7 +203,7 @@ func (p *Provider) fetchNSEData(symbol string) (*nseQuoteResponse, error) {
 	if err != nil {
 		logger.Error("failed to read NSE response body", "error", err, "symbol", symbol)
 		return nil, &provider.Error{
-			Message:  fmt.Sprintf("failed to read response: %v", err),
+			Message:  "failed to read response: " + err.Error(),
 			Provider: p.Name(),
 		}
 	}
@@ -201,7 +213,7 @@ func (p *Provider) fetchNSEData(symbol string) (*nseQuoteResponse, error) {
 	if err := json.Unmarshal(body, &result); err != nil {
 		logger.Error("failed to parse NSE JSON", "error", err, "symbol", symbol)
 		return nil, &provider.Error{
-			Message:  fmt.Sprintf("failed to parse JSON: %v", err),
+			Message:  "failed to parse JSON: " + err.Error(),
 			Provider: p.Name(),
 		}
 	}

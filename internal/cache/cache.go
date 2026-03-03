@@ -8,7 +8,7 @@ import (
 
 // Entry represents a cached entry with expiration
 type Entry struct {
-	Value      interface{}
+	Value      any
 	ExpiresAt  time.Time
 	AccessedAt time.Time
 }
@@ -73,7 +73,7 @@ func New(config Config) *Cache {
 }
 
 // Get retrieves a value from the cache
-func (c *Cache) Get(key string) (interface{}, bool) {
+func (c *Cache) Get(key string) (any, bool) {
 	if !c.config.Enabled {
 		c.stats.recordMiss()
 		return nil, false
@@ -105,7 +105,7 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 }
 
 // Set stores a value in the cache
-func (c *Cache) Set(key string, value interface{}) {
+func (c *Cache) Set(key string, value any) {
 	if !c.config.Enabled {
 		return
 	}
