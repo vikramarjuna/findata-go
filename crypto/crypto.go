@@ -1,5 +1,5 @@
 // Package crypto provides access to cryptocurrency prices
-package crypto
+package crypto // nolint:revive // crypto refers to cryptocurrency, not the standard library crypto package
 
 import (
 	"fmt"
